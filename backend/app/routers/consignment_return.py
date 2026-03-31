@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,6 +16,8 @@ from app.utils import (
 )
 
 router = APIRouter(prefix="/api/consignment-return", tags=["consignment-return"])
+
+CUSTOMER_TYPES = ["customer", "overseas customer", "individual"]
 
 
 def _calc_totals(row: ConsignmentReturn):
@@ -35,7 +37,10 @@ async def get_options(
 ):
     parties = (await db.execute(
         select(AccountMaster.account_group_name)
-        .where(AccountMaster.company_id == current_user.company_id)
+        .where(
+            AccountMaster.company_id == current_user.company_id,
+            func.lower(AccountMaster.account_type).in_(CUSTOMER_TYPES),
+        )
         .order_by(AccountMaster.account_group_name)
     )).scalars().all()
     parcel_rows = (await db.execute(

@@ -17,6 +17,8 @@ from app.utils import (
 
 router = APIRouter(prefix="/api/sale", tags=["sale"])
 
+CUSTOMER_TYPES = ["customer", "overseas customer", "individual"]
+
 
 def _calc_totals(row: Sale):
     total_carats = sum((i.selected_carat or i.issue_carats or 0) for i in row.items)
@@ -34,7 +36,10 @@ async def get_options(
 ):
     parties = (await db.execute(
         select(AccountMaster.account_group_name)
-        .where(AccountMaster.company_id == current_user.company_id)
+        .where(
+            AccountMaster.company_id == current_user.company_id,
+            func.lower(AccountMaster.account_type).in_(CUSTOMER_TYPES),
+        )
         .order_by(AccountMaster.account_group_name)
     )).scalars().all()
     parcel_rows = (await db.execute(

@@ -1,9 +1,21 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Download, Plus, Save, Trash2, Pencil } from 'lucide-react';
 import api from '../api';
 import ListPageControls from '../components/ListPageControls';
+
+const UNDER_GROUP_OPTIONS = [
+  'Assets', 'Liabilities', 'Income', 'Expense', 'Fixed Assets', 'Current Assets',
+  'Loan And Advances', 'Non Trading Expenses', 'Trading Expenses', 'Stock',
+  'Non Trading Income', 'Trading Income', 'Current Liabilities', 'Provision And Loan',
+  'Reserves And Surplus', 'Cash And Bank Balance', 'Sundry Debtors', 'Loan Given',
+  'OFFICE STAFF', 'Bad Debt And Depriciation', 'Financial Expense', 'Marketing Expense',
+  'Office Expense', 'Purchase Overheads', 'Interest Earning', 'Sales And Comission',
+  'Brokers', 'Sundry Creditors', 'Loan Taken', 'Propritors Capital', 'Bank Balance',
+  'Cash Balance', 'Local Customer', 'Outside Customer', 'Local Supplier',
+  'Outside Supplier', 'Secured Taken Loan', 'Unsecured Taken Loan', 'Commission',
+];
 
 const INIT_FORM = {
   entry_type: 'Account',
@@ -256,6 +268,55 @@ function PhoneField({ name, label, value, onChange, error }) {
   );
 }
 
+function SearchableBaseSelect({ name, value, options, onChange, onBlur, error, label }) {
+  const [query, setQuery] = useState(value || '');
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef(null);
+  const common = `w-full px-3 py-2 text-sm border rounded-md focus:ring-1 focus:ring-blue-500 outline-none ${error ? 'border-red-500' : 'border-gray-300'}`;
+
+  const filtered = query
+    ? options.filter((o) => o.toLowerCase().includes(query.toLowerCase()))
+    : options;
+
+  useEffect(() => { setQuery(value || ''); }, [value]);
+  useEffect(() => {
+    function handleClick(e) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const select = (val) => { onChange(name, val); setQuery(val); setOpen(false); };
+
+  return (
+    <div className="space-y-1">
+      <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
+      <div ref={wrapperRef} className="relative">
+        <input
+          value={query}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); if (!e.target.value) onChange(name, ''); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => { setTimeout(() => setOpen(false), 150); onBlur?.(name); }}
+          className={common}
+          placeholder="Search..."
+        />
+        {open && filtered.length > 0 && (
+          <ul className="absolute z-50 w-full mt-1 max-h-48 overflow-auto bg-white border border-gray-200 rounded-md shadow-lg">
+            {filtered.map((o) => (
+              <li key={o} onMouseDown={() => select(o)}
+                className={`px-3 py-2 text-sm cursor-pointer hover:bg-blue-50 ${o === value ? 'font-semibold text-blue-700' : ''}`}>
+                {o}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
 export default function AccountMasterPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -401,8 +462,7 @@ export default function AccountMasterPage() {
     if (nameError) return nameError;
     if (!form.under_group_name.trim()) return 'Under Group is required';
     if (!form.account_type.trim()) return 'Account Type is required';
-    if (form.opening_balance === '') return 'Opening Balance is required';
-    if (Number(form.opening_balance) === 0 && !form.allow_zero_opening_balance) return 'Opening Balance must be non-zero';
+    if (form.opening_balance === '' || form.opening_balance === null || form.opening_balance === undefined) setValue('opening_balance', 0);
     const phoneError = Object.values(phoneErrors)[0];
     if (phoneError) return phoneError;
     return '';
@@ -600,7 +660,7 @@ export default function AccountMasterPage() {
               onBlur={handleBlur}
             />
           </div>
-          <BaseField name="under_group_name" label="Under Group *" value={form.under_group_name} onChange={setValue} onBlur={handleBlur} options={options.groups.map((g) => g.name)} error={fieldErrors.under_group_name} />
+          <SearchableBaseSelect name="under_group_name" label="Under Group *" value={form.under_group_name} options={UNDER_GROUP_OPTIONS} onChange={setValue} onBlur={handleBlur} error={fieldErrors.under_group_name} />
           <BaseField name="account_type" label="Account Type *" value={form.account_type} onChange={setValue} onBlur={handleBlur} options={options.account_types} error={fieldErrors.account_type} />
           <BaseField name="currency" label="Currency" value={form.currency} onChange={setValue} onBlur={handleBlur} options={options.currencies} error={fieldErrors.currency} />
           <BaseField name="country" label="Country" value={form.country} onChange={setValue} onBlur={handleBlur} options={options.countries} error={fieldErrors.country} />

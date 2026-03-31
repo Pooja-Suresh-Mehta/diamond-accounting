@@ -5,6 +5,7 @@ import { Download, FileUp, Plus, Save, Trash2 } from 'lucide-react';
 import api from '../api';
 import F from '../components/FormField';
 import ListPageControls from '../components/ListPageControls';
+import PartyField from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { INIT_LINE_ITEM, applyLotAutoFields, calculateTotals, getCurrencyDefaults, normalizeLineItem } from '../utils/parcelTransactionCalc';
 
@@ -233,7 +234,7 @@ export default function ConsignmentReturnPage() {
         <F label="Source Consignment #" name="source_consignment_number" value={form.source_consignment_number} onChange={handleField}
           options={opts.consignment_numbers || []} searchable />
         <F label="Date" name="date" value={form.date} onChange={handleField} type="date" />
-        <F label="Party" name="party" value={form.party} onChange={handleField} options={opts.parties || []} searchable />
+        <PartyField value={form.party} onChange={handleField} options={opts.parties || []} />
         <F label="Currency" name="currency" value={form.currency} onChange={handleField} options={opts.currencies || []} />
         <F label="INR Rate" name="inr_rate" value={form.inr_rate} onChange={handleField} type="number" />
         <F label="USD Rate" name="usd_rate" value={form.usd_rate} onChange={handleField} type="number" />

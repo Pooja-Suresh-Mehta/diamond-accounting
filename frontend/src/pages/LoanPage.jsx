@@ -5,6 +5,7 @@ import { Download, Plus, Save } from 'lucide-react';
 import api from '../api';
 import F from '../components/FormField';
 import ListPageControls from '../components/ListPageControls';
+import PartyField from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { getCurrencyDefaults } from '../utils/parcelTransactionCalc';
 
@@ -215,7 +216,7 @@ export default function LoanPage({ loanType: propLoanType }) {
           </label>
         </div>
 
-        <F label="Party Name" name="party" value={form.party} onChange={handleField} options={opts.parties || []} searchable />
+        <PartyField value={form.party} onChange={handleField} options={opts.parties || []} />
         <F label="Due Date" name="due_date" value={form.due_date} onChange={handleField} type="date" />
         <F label="Due Days" name="due_days" value={form.due_days} onChange={handleField} type="number" readOnly />
 
@@ -233,7 +234,7 @@ export default function LoanPage({ loanType: propLoanType }) {
         <F label="Interest" name="interest" value={form.interest} onChange={handleField} type="number" />
         <F label="Divide Days" name="divide_days" value={form.divide_days} onChange={handleField} type="number" />
 
-        <F label={form.loan_type === 'Taken' ? 'Pay. To Party' : 'Rec. From Party'} name="rec_from_party" value={form.rec_from_party} onChange={handleField} options={opts.parties || []} searchable />
+        <PartyField name="rec_from_party" label="Rec. From Party" value={form.rec_from_party} onChange={handleField} options={opts.parties || []} />
 
         <div className="col-span-2 md:col-span-4">
           <label className="block text-xs font-medium text-gray-600 mb-1">Description</label>

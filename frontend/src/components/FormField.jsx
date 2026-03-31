@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 
 export default function FormField({
   label, name, value, onChange, options = [], type = 'text',
-  searchable = false, readOnly = false,
+  searchable = false, readOnly = false, onAddNew,
 }) {
   const cls = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none';
   const shouldSearch = options.length > 0 && (searchable || options.length > 10);
@@ -21,7 +21,12 @@ export default function FormField({
   if (shouldSearch) {
     return (
       <div className="space-y-1">
-        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
+          {onAddNew && (
+            <button type="button" onClick={onAddNew} className="text-xs text-blue-600 hover:text-blue-800 font-medium">+ New</button>
+          )}
+        </div>
         <SearchableSelect
           value={value || ''}
           options={options}
@@ -35,7 +40,12 @@ export default function FormField({
 
   return (
     <div className="space-y-1">
-      <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
+        {onAddNew && (
+          <button type="button" onClick={onAddNew} className="text-xs text-blue-600 hover:text-blue-800 font-medium">+ New</button>
+        )}
+      </div>
       {options.length ? (
         <select value={value || ''} onChange={(e) => onChange(name, e.target.value)} disabled={readOnly} className={cls}>
           <option value="">Select {label}</option>

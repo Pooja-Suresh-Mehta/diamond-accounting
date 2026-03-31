@@ -5,6 +5,7 @@ import { Download, Plus, Save, Trash2 } from 'lucide-react';
 import api from '../api';
 import F from '../components/FormField';
 import ListPageControls from '../components/ListPageControls';
+import PartyField from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { INIT_LINE_ITEM, applyLotAutoFields, calculateTotals, getCurrencyDefaults, normalizeLineItem } from '../utils/parcelTransactionCalc';
 
@@ -247,7 +248,7 @@ export default function ConsignmentPage() {
         <F label="Print Date" name="print_date" value={form.print_date} onChange={handleField} type="date" />
         <F label="Type" name="purchase_type" value={form.purchase_type} onChange={handleField} options={opts.types || []} />
         <F label="Category" name="category" value={form.category} onChange={handleField} options={opts.categories || []} />
-        <F label="Party" name="party" value={form.party} onChange={handleField} options={opts.parties || []} searchable />
+        <PartyField value={form.party} onChange={handleField} options={opts.parties || []} />
         <F label="Due Days" name="due_days" value={form.due_days} onChange={handleField} type="number" />
         <F label="Due Date" name="due_date" value={form.due_date} onChange={handleField} type="date" />
         <F label="Currency" name="currency" value={form.currency} onChange={handleField} options={opts.currencies || []} />

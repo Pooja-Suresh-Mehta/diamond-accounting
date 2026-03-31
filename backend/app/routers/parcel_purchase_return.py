@@ -34,9 +34,13 @@ async def get_options(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    CUSTOMER_TYPES = ["customer", "overseas customer", "individual"]
     parties = (await db.execute(
         select(AccountMaster.account_group_name)
-        .where(AccountMaster.company_id == current_user.company_id)
+        .where(
+            AccountMaster.company_id == current_user.company_id,
+            func.lower(AccountMaster.account_type).in_(CUSTOMER_TYPES),
+        )
         .order_by(AccountMaster.account_group_name)
     )).scalars().all()
     brokers = (await db.execute(

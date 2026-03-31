@@ -129,11 +129,6 @@ async def _log_activity(
     ))
 
 
-def _validate_opening_balance(opening_balance: float, allow_zero: bool):
-    if opening_balance == 0 and not allow_zero:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Opening Balance must be non-zero")
-
-
 async def _ensure_system_accounts(db: AsyncSession, company_id: str):
     existing_rows = (await db.execute(select(AccountMaster).where(AccountMaster.company_id == company_id))).scalars().all()
     existing_lookup = {row.account_group_name.strip().lower(): row for row in existing_rows}
@@ -318,7 +313,6 @@ async def create_account(
 ):
     try:
         await _ensure_unique_name(db, current_user.company_id, payload.account_group_name)
-        _validate_opening_balance(payload.opening_balance, allow_zero=False)
 
         data = payload.model_dump()
         data["account_name"] = data.get("account_name") or data["account_group_name"]
@@ -373,7 +367,6 @@ async def update_account(
 
     try:
         await _ensure_unique_name(db, current_user.company_id, payload.account_group_name, exclude_id=account_id)
-        _validate_opening_balance(payload.opening_balance, allow_zero=row.allow_zero_opening_balance)
 
         for key, val in payload.model_dump().items():
             setattr(row, key, val)

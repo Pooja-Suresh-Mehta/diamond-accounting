@@ -17,6 +17,8 @@ from app.utils import (
 
 router = APIRouter(prefix="/api/memo-out-return", tags=["memo-out-return"])
 
+CUSTOMER_TYPES = ["customer", "overseas customer", "individual"]
+
 
 def _calc_totals(row: MemoOutReturn):
     total_carats = sum((i.weight or 0) for i in row.items)
@@ -34,7 +36,10 @@ async def get_options(
 ):
     parties = (await db.execute(
         select(AccountMaster.account_group_name)
-        .where(AccountMaster.company_id == current_user.company_id)
+        .where(
+            AccountMaster.company_id == current_user.company_id,
+            func.lower(AccountMaster.account_type).in_(CUSTOMER_TYPES),
+        )
         .order_by(AccountMaster.account_group_name)
     )).scalars().all()
     memo_rows = (await db.execute(

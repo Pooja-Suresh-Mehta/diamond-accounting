@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { Download, Plus, Save, Trash2 } from 'lucide-react';
 import api from '../api';
 import ListPageControls from '../components/ListPageControls';
+import PartyField from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { calculateTotals, getCurrencyDefaults } from '../utils/parcelTransactionCalc';
 
@@ -63,7 +64,7 @@ const numericFields = new Set([
 ]);
 const itemNumericFields = new Set(['weight', 'pcs', 'rate', 'usd_rate', 'less1', 'less2', 'less3', 'amount']);
 
-function F({ label, name, value, onChange, options = [], type = 'text', searchable = false, readOnly = false }) {
+function F({ label, name, value, onChange, options = [], type = 'text', searchable = false, readOnly = false, onAddNew }) {
   const cls = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none';
   const shouldSearch = options.length > 0 && (searchable || options.length > 10);
   const isNumber = type === 'number';
@@ -78,7 +79,12 @@ function F({ label, name, value, onChange, options = [], type = 'text', searchab
   };
   return (
     <div className="space-y-1">
-      <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
+        {onAddNew && (
+          <button type="button" onClick={onAddNew} className="text-xs text-blue-600 hover:text-blue-800 font-medium">+ New</button>
+        )}
+      </div>
       {options.length ? (
         shouldSearch ? (
           <>
@@ -367,7 +373,7 @@ export default function MemoOutPage() {
           <F label="Type" name="purchase_type" value={form.purchase_type} onChange={setValue} options={opts.types} />
           <F label="Sub Type" name="sub_type" value={form.sub_type} onChange={setValue} options={opts.sub_types} />
           <F label="Category" name="category" value={form.category} onChange={setValue} options={opts.categories} />
-          <F label="Party" name="party" value={form.party} onChange={setValue} options={opts.parties} searchable />
+          <PartyField value={form.party} onChange={setValue} options={opts.parties} />
           <F label="Due Days" name="due_days" value={form.due_days} onChange={setValue} type="number" />
           <F label="Due Date" name="due_date" value={form.due_date} onChange={setValue} type="date" />
           <F label="Currency" name="currency" value={form.currency} onChange={setValue} options={opts.currencies} />
