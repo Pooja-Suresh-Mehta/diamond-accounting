@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { Download, Plus, Save, Trash2 } from 'lucide-react';
 import api from '../api';
 import ListPageControls from '../components/ListPageControls';
-import PartyField from '../components/PartyField';
+import PartyField, { BrokerField } from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { INIT_LINE_ITEM, applyLotAutoFields, calculateTotals, getCurrencyDefaults, normalizeLineItem } from '../utils/parcelTransactionCalc';
 
@@ -366,7 +366,7 @@ export default function SalePage() {
           <PartyField name="comm_agent" label="Comm.Agent" value={form.comm_agent} onChange={setValue} options={opts.parties} />
           <F label="Com %" name="com_pct" value={form.com_pct} onChange={setValue} type="number" />
           <F label="Com Amount" name="com_amount" value={form.com_amount} onChange={setValue} type="number" />
-          <F label="Broker" name="broker" value={form.broker} onChange={setValue} options={opts.parties} searchable />
+          <BrokerField name="broker" value={form.broker} onChange={setValue} options={opts.parties} />
           <F label="Bro %" name="bro_pct" value={form.bro_pct} onChange={setValue} type="number" />
           <F label="Bro Amount" name="bro_amount" value={form.bro_amount} onChange={setValue} type="number" />
           <div className="space-y-1 flex items-end">

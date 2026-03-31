@@ -370,7 +370,9 @@ export default function AccountMasterPage() {
     if (isEditMode) {
       loadEditRow().catch(() => toast.error('Failed to load account'));
     } else if (isAddMode) {
-      setForm(INIT_FORM);
+      const params = new URLSearchParams(location.search);
+      const presetType = params.get('account_type');
+      setForm({ ...INIT_FORM, ...(presetType ? { account_type: presetType } : {}) });
     }
   }, [isEditMode, isAddMode, id]);
 

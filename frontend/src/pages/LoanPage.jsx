@@ -5,7 +5,7 @@ import { Download, Plus, Save } from 'lucide-react';
 import api from '../api';
 import F from '../components/FormField';
 import ListPageControls from '../components/ListPageControls';
-import PartyField from '../components/PartyField';
+import PartyField, { BrokerField } from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { getCurrencyDefaults } from '../utils/parcelTransactionCalc';
 
@@ -226,7 +226,7 @@ export default function LoanPage({ loanType: propLoanType }) {
           <F label="USD *" name="usd_rate" value={form.usd_rate} onChange={handleField} type="number" />
         </div>
 
-        <F label="Broker" name="broker" value={form.broker} onChange={handleField} options={opts.brokers || []} searchable />
+        <BrokerField name="broker" value={form.broker} onChange={handleField} options={opts.brokers || []} />
         <F label="Broker %" name="broker_pct" value={form.broker_pct} onChange={handleField} type="number" />
 
         <F label="Amount" name="amount" value={form.amount} onChange={handleField} type="number" />
