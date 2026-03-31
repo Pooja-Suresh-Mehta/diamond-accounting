@@ -1,0 +1,61 @@
+# Images
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.ico
+*.svg
+*.webp
+
+# HTML files
+*.html
+*.htm
+
+# Excel / Office files
+*.xlsx
+*.xls
+*.docx
+*.doc
+*.pptx
+*.ppt
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Python virtual environment
+venv/
+.venv/
+env/
+
+# Scraped data directories
+scraped_local/
+scraped_ref2/
+scraped_reference/
+difference_screenshots_html/
+diamond_app_details/
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Logs
+*.log
+
+# Build output
+dist/
+build/
+
+.claude/
+.logs/
