@@ -1,49 +1,66 @@
-# Poojan Gems - Diamond Inventory Management
+# Diamond Accounting - Diamond Inventory Management
 
 ## Quick Start (Local Development)
 
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+
-- PostgreSQL 15+
+- PostgreSQL 15+ (optional; SQLite used by default for local dev)
 
-### 1. Database Setup
-```bash
-# Create the database
-createdb poojan_gems
-```
-
-### 2. Backend
+### 1. Backend
 ```bash
 cd backend
 python3 -m venv venv
 source venv/bin/activate  # macOS/Linux
 pip install -r requirements.txt
 
-# Copy env file and edit
+# Copy env file and configure
 cp .env.example .env
+# Edit .env — set SECRET_KEY at minimum
 
-# Seed the database with demo data
+# Seed the database (creates tables + default admin user)
 python -m seed
 
 # Start the server
 uvicorn app.main:app --reload --port 8000
 ```
 
-### 3. Frontend
+### 2. Frontend
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-### 4. Open
+### 3. Open
 Visit http://localhost:5173
 
-**Demo Login:**
-- Company: `Poojan Gems`
-- Username: `admin`
-- Password: `admin123`
+---
+
+## First Login & User Setup
+
+After seeding, log in with the default admin credentials printed in the terminal.
+**Change the admin password immediately after first login.**
+
+### Creating Users (Admin only)
+
+1. Log in as admin
+2. Go to **Users** in the sidebar
+3. Click **Add User** and fill in:
+   - Username
+   - Password (min 6 characters)
+   - Full Name
+   - Role (see below)
+
+### Roles
+
+| Role   | Permissions |
+|--------|-------------|
+| Admin  | Full access including user management |
+| User   | Create and edit all transactions and masters |
+| Viewer | Read-only access to all data |
+
+Admins can also **deactivate** users (they lose login access) or **reset passwords** from the Users page.
 
 ---
 

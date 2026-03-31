@@ -38,6 +38,10 @@ scraped_reference/
 difference_screenshots_html/
 diamond_app_details/
 
+# SQLite database files
+*.db
+*.sqlite
+
 # Environment
 .env
 .env.*

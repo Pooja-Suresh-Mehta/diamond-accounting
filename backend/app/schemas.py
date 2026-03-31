@@ -30,6 +30,34 @@ class UserOut(BaseModel):
         from_attributes = True
 
 
+# ── User Management ────────────────────────────────────
+
+class UserCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6)
+    full_name: Optional[str] = None
+    role: str = Field(default="user")  # admin, user, viewer
+
+    @model_validator(mode="after")
+    def validate_role(self):
+        if self.role not in ("admin", "user", "viewer"):
+            raise ValueError("role must be admin, user, or viewer")
+        return self
+
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    role: Optional[str] = None
+    password: Optional[str] = Field(default=None, min_length=6)
+    is_active: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def validate_role(self):
+        if self.role is not None and self.role not in ("admin", "user", "viewer"):
+            raise ValueError("role must be admin, user, or viewer")
+        return self
+
+
 # ── Diamond Search ─────────────────────────────────────
 
 class DiamondSearchRequest(BaseModel):

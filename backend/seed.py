@@ -85,7 +85,7 @@ async def seed():
 
     async with async_session() as db:
         # Company
-        company = Company(name="Poojan Gems", address="Mumbai, India", phone="+91-22-12345678", email="info@poojangems.com")
+        company = Company(name="Diamond Accounting", address="Mumbai, India", phone="+91-22-12345678", email="info@diamondaccounting.com")
         db.add(company)
         await db.flush()
 
@@ -201,7 +201,7 @@ async def seed():
 
         await db.commit()
         print(f"✅ Seeded: 1 company, {len(OFFICES)} offices, 2 users, 200 diamonds, {len(ACCOUNT_SEEDS)} accounts")
-        print(f"   Login: company='Poojan Gems', user='admin', pass='admin123'")
+        print(f"   Login: company='Diamond Accounting', user='admin', pass='admin123' (change after first login)")
 
 
 if __name__ == "__main__":

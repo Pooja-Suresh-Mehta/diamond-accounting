@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { LayoutDashboard, Search, LogOut, Diamond, Menu, X, BookOpenText, FolderTree, ChevronDown, ChevronRight, Moon, Sun, Boxes, Banknote, BarChart2, Wrench } from 'lucide-react';
+import { LayoutDashboard, Search, LogOut, Diamond, Menu, X, BookOpenText, FolderTree, ChevronDown, ChevronRight, Moon, Sun, Boxes, Banknote, BarChart2, Wrench, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const navItems = [
@@ -78,7 +78,7 @@ export default function Layout() {
         <div className="flex items-center gap-3 px-6 py-5 border-b border-gray-700 flex-shrink-0">
           <Diamond className="w-8 h-8 text-blue-400" />
           <div>
-            <h1 className="text-lg font-bold">Poojan Gems</h1>
+            <h1 className="text-lg font-bold">Diamond Accounting</h1>
             <p className="text-xs text-gray-400">{user?.company_name}</p>
           </div>
         </div>
@@ -249,6 +249,18 @@ export default function Layout() {
             <Wrench className="w-5 h-5" />
             Utilities
           </NavLink>
+
+          {/* Admin: User Management */}
+          {user?.role === 'admin' && (
+            <NavLink
+              to="/users"
+              onClick={() => setSidebarOpen(false)}
+              className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
+            >
+              <Users className="w-5 h-5" />
+              Users
+            </NavLink>
+          )}
         </nav>
 
         <div className="flex-shrink-0 p-4 border-t border-gray-700">

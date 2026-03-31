@@ -24,6 +24,7 @@ import ParcelReportsHub from './pages/reports/ParcelReportsHub';
 import FinancialReportsHub from './pages/reports/FinancialReportsHub';
 import UtilitiesPage from './pages/UtilitiesPage';
 import ParcelModulePage from './pages/ParcelModulePage';
+import UsersPage from './pages/UsersPage';
 import Layout from './components/Layout';
 
 class AppErrorBoundary extends React.Component {
@@ -142,6 +143,9 @@ function AppRoutes() {
 
         {/* Utilities */}
         <Route path="utilities" element={<UtilitiesPage />} />
+
+        {/* Admin: User Management */}
+        <Route path="users" element={<UsersPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -13,10 +13,10 @@ from app.routers import (
 from app.routers import (
     consignment, consignment_return,
     loans, payments, journal_entries, income_expense,
-    parcel_reports, financial_reports, utilities,
+    parcel_reports, financial_reports, utilities, users,
 )
 
-app = FastAPI(title="Poojan Gems - Diamond Inventory", version="1.0.0")
+app = FastAPI(title="Diamond Accounting - Diamond Inventory", version="1.0.0")
 
 # CORS: allow configured origins or fall back to dev defaults
 # Set CORS_ORIGINS env var to override; ngrok URLs are always allowed.
@@ -68,6 +68,7 @@ app.include_router(income_expense.router)
 app.include_router(parcel_reports.router)
 app.include_router(financial_reports.router)
 app.include_router(utilities.router)
+app.include_router(users.router)
 
 
 @app.get("/api/health")
