@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     port: 5173,
     // Allow requests from ngrok tunnels (any subdomain)
-    allowedHosts: ['localhost', '.ngrok-free.app', '.ngrok.io'],
+    allowedHosts: ['localhost', '.ngrok-free.app', '.ngrok.io', '.trycloudflare.com'],
     proxy: {
       '/api': {
         target: 'http://localhost:8001',
