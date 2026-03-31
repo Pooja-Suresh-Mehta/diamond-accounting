@@ -302,6 +302,20 @@ class AccountMaster(Base):
     )
 
 
+class DropdownOption(Base):
+    __tablename__ = "dropdown_options"
+
+    id = Column(String(36), primary_key=True, default=new_uuid)
+    company_id = Column(String(36), ForeignKey("companies.id"), nullable=False, index=True)
+    field_name = Column(String(50), nullable=False)   # e.g. "shape", "color", "clarity", "size", "sieve"
+    value = Column(String(200), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("company_id", "field_name", "value", name="uq_dropdown_option"),
+    )
+
+
 class ActivityLog(Base):
     __tablename__ = "activity_logs"
 

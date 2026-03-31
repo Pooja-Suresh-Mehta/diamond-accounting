@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { Plus, Save, Pencil, Trash2 } from 'lucide-react';
 import api from '../api';
 import ListPageControls from '../components/ListPageControls';
+import CreatableField from '../components/CreatableField';
 
 const INIT = {
   lot_no: '',
@@ -96,6 +97,12 @@ export default function ParcelMasterPage() {
   const loadOpts = async () => {
     const res = await api.get('/parcel-master/options');
     setOpts(res.data);
+  };
+
+  const handleNewOption = (fieldKey, newVal) => {
+    const keyMap = { shape: 'shapes', color: 'colors', clarity: 'clarities', size: 'sizes', sieve: 'sieves' };
+    const optsKey = keyMap[fieldKey];
+    if (optsKey) setOpts((prev) => ({ ...prev, [optsKey]: [...(prev[optsKey] || []), newVal] }));
   };
   const loadEdit = async () => {
     if (!id) return;
@@ -262,11 +269,11 @@ export default function ParcelMasterPage() {
 
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
           <Field name="lot_no" label="Stock ID/LotNo" value={form.lot_no} onChange={setValue} />
-          <Field name="shape" label="Shape" value={form.shape} onChange={setValue} options={opts.shapes} />
-          <Field name="color" label="Color" value={form.color} onChange={setValue} options={opts.colors} />
-          <Field name="clarity" label="Clarity" value={form.clarity} onChange={setValue} options={opts.clarities} />
-          <Field name="size" label="Size" value={form.size} onChange={setValue} options={opts.sizes} />
-          <Field name="sieve_mm" label="Sieve / MM" value={form.sieve_mm} onChange={setValue} options={opts.sieves} />
+          <CreatableField name="shape" label="Shape" value={form.shape} onChange={setValue} options={opts.shapes} fieldKey="shape" onNewOption={handleNewOption} />
+          <CreatableField name="color" label="Color" value={form.color} onChange={setValue} options={opts.colors} fieldKey="color" onNewOption={handleNewOption} />
+          <CreatableField name="clarity" label="Clarity" value={form.clarity} onChange={setValue} options={opts.clarities} fieldKey="clarity" onNewOption={handleNewOption} />
+          <CreatableField name="size" label="Size" value={form.size} onChange={setValue} options={opts.sizes} fieldKey="size" onNewOption={handleNewOption} />
+          <CreatableField name="sieve_mm" label="Sieve / MM" value={form.sieve_mm} onChange={setValue} options={opts.sieves} fieldKey="sieve" onNewOption={handleNewOption} />
           <Field name="item_name" label="Stock Name" value={form.item_name} onChange={setValue} />
           <Field name="stock_group_id" label="Stock GroupID" value={form.stock_group_id} onChange={setValue} options={opts.group_ids} />
           <div className="xl:col-span-2"><Field name="description" label="Description" value={form.description} onChange={setValue} rows={2} /></div>

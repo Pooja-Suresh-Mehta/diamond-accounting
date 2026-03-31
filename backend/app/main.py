@@ -13,7 +13,7 @@ from app.routers import (
 from app.routers import (
     consignment, consignment_return,
     loans, payments, journal_entries, income_expense,
-    parcel_reports, financial_reports, utilities, users,
+    parcel_reports, financial_reports, utilities, users, dropdown_options,
 )
 
 app = FastAPI(title="Diamond Accounting - Diamond Inventory", version="1.0.0")
@@ -69,6 +69,7 @@ app.include_router(parcel_reports.router)
 app.include_router(financial_reports.router)
 app.include_router(utilities.router)
 app.include_router(users.router)
+app.include_router(dropdown_options.router)
 
 
 @app.get("/api/health")

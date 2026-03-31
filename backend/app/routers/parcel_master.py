@@ -4,28 +4,39 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models.models import ParcelMaster, User
+from app.models.models import DropdownOption, ParcelMaster, User
 from app.schemas import ParcelMasterCreate, ParcelMasterOut, ParcelMasterUpdate
 
 router = APIRouter(prefix="/api/parcel-master", tags=["parcel-master"])
 
 SHAPES = [
-    "RBC", "PR", "PR1", "EM", "EMA", "Square EmeraldA", "Square Emerald", "PRN", "MQ", "AS",
-    "Tapered Baguette", "Tapered Bullet", "Pear", "Calf", "Briolette", "Bullets", "CB",
-    "Cushion Modified", "EuropeanCut", "Epaulette", "Flanders", "Half Moon", "HE", "Hexagonal",
-    "Kite", "Lozenge", "Octagonal", "OV", "Pentagonal", "RA", "Square Radiant", "Rose", "Shield",
-    "Square", "Star", "BR", "Testa", "TAPP/BUGG", "dd", "PB",
+    "Round", "Princess", "Emerald", "Oval", "Cushion", "Marquise", "Pear",
+    "Radiant", "Heart", "Triangle", "Baguette", "Taper",
 ]
-COLORS = ["D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "MIX"]
-CLARITIES = ["FL", "IF", "VVS1", "VVS2", "VS1", "VS2", "SI1", "SI2", "SI3", "I1", "I2", "I3"]
+COLORS = ["D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "MIX",
+          "G+", "G-", "White", "OW", "NW", "LB", "OWLC", "NWLC", "LC", "OWLB", "NWLB"]
+CLARITIES = ["FL", "IF", "VVS1", "VVS2", "VS1", "VS2", "SI1", "SI2", "SI3", "I1", "I2", "I3",
+             "SJEW", "DLX", "DLXAA", "CWP", "REJ", "COLL"]
 SIZES = [
-    "10.00 CRT UP", "5.00 CRT UP", "4.50 CRT UP", "4.00 CRT UP", "3.50 CRT UP", "3.00 CRT UP",
-    "2.70 CRT UP", "2.50 CRT UP", "2.30 CRT UP", "2.00 CRT UP", "1.90 CRT UP", "1.80 CRT UP",
-    "1.70 CRT UP", "1.60 CRT UP", "1.50 CRT UP", "1.40 CRT UP", "1.30 CRT UP", "1.20 CRT UP",
-    "1.00 CRT UP", "0.90 UP", "0.80 UP", "0.70 UP", "0.60 UP", "0.50 UP", "0.40 UP", "0.30 UP",
-    "0.23 UP", "0.18 UP",
+    "0.18 UP", "0.18 DOWN", "0.23 UP", "0.30 UP", "0.40 UP", "0.50 UP",
+    "0.70 UP", "0.80 UP", "0.90 UP", "1.00 UP", "1.50 UP", "2.00 UP",
+    "2.50 UP", "3.00 UP", "5.00 UP",
 ]
-SIEVES = ["-000", "+000", "000-2", "2-6", "6-9", "9-11", "11 UP"]
+SIEVES = ["-000", "+000", "000-2", "2-6", "6-9", "9-11", "11 UP",
+          "-2.0", "+2.0", "+2.5", "+3.0", "+3.5", "+4.0", "+4.5", "+5.0", "+6.0",
+          "-7", "+7", "1/10", "1/6", "1/5", "1/4", "1/3", "3/8"]
+
+
+def _merge(defaults: list[str], custom: list[str]) -> list[str]:
+    """Merge default + custom values, deduplicate case-insensitively, preserve order."""
+    seen = set()
+    result = []
+    for v in defaults + custom:
+        key = v.strip().lower()
+        if key and key not in seen:
+            seen.add(key)
+            result.append(v.strip())
+    return result
 STOCK_TYPES = ["Natural Diamond", "Lab Grown Diamond", "Gem Stone"]
 STOCK_SUBTYPES = ["Polished", "Rough", "Makeable"]
 GROWN_PROCESS_TYPES = ["Natural", "HPHT", "CVD"]
@@ -62,12 +73,22 @@ async def get_parcel_options(
     if not groups:
         groups = ["GRP-1", "GRP-2", "GRP-3"]
 
+    # Fetch all custom options for this company in one query
+    custom_rows = (await db.execute(
+        select(DropdownOption.field_name, DropdownOption.value)
+        .where(DropdownOption.company_id == current_user.company_id)
+        .order_by(DropdownOption.value)
+    )).all()
+    custom: dict[str, list[str]] = {}
+    for field_name, value in custom_rows:
+        custom.setdefault(field_name, []).append(value)
+
     return {
-        "shapes": SHAPES,
-        "colors": COLORS,
-        "clarities": CLARITIES,
-        "sizes": SIZES,
-        "sieves": SIEVES,
+        "shapes": _merge(SHAPES, custom.get("shape", [])),
+        "colors": _merge(COLORS, custom.get("color", [])),
+        "clarities": _merge(CLARITIES, custom.get("clarity", [])),
+        "sizes": _merge(SIZES, custom.get("size", [])),
+        "sieves": _merge(SIEVES, custom.get("sieve", [])),
         "group_ids": groups,
         "stock_types": STOCK_TYPES,
         "stock_subtypes": STOCK_SUBTYPES,

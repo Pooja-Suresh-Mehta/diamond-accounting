@@ -821,8 +821,8 @@ async def parcel_report_options(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    from app.models.models import AccountMaster
-    from app.routers.parcel_master import SHAPES, COLORS, CLARITIES, SIZES, SIEVES
+    from app.models.models import AccountMaster, DropdownOption
+    from app.routers.parcel_master import SHAPES, COLORS, CLARITIES, SIZES, SIEVES, _merge
 
     parties = (await db.execute(
         select(AccountMaster.account_group_name)
@@ -846,14 +846,23 @@ async def parcel_report_options(
         .order_by(ParcelMaster.lot_no)
     )).scalars().all()
 
+    custom_rows = (await db.execute(
+        select(DropdownOption.field_name, DropdownOption.value)
+        .where(DropdownOption.company_id == current_user.company_id)
+        .order_by(DropdownOption.value)
+    )).all()
+    custom: dict[str, list[str]] = {}
+    for field_name, value in custom_rows:
+        custom.setdefault(field_name, []).append(value)
+
     return {
         "parties": list(parties),
         "brokers": list(brokers),
         "currencies": CURRENCIES,
-        "shapes": SHAPES,
-        "colors": COLORS,
-        "clarities": CLARITIES,
-        "sizes": SIZES,
-        "sieves": SIEVES,
+        "shapes": _merge(SHAPES, custom.get("shape", [])),
+        "colors": _merge(COLORS, custom.get("color", [])),
+        "clarities": _merge(CLARITIES, custom.get("clarity", [])),
+        "sizes": _merge(SIZES, custom.get("size", [])),
+        "sieves": _merge(SIEVES, custom.get("sieve", [])),
         "lot_nos": list(lot_nos),
     }
