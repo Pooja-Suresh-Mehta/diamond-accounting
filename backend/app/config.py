@@ -13,7 +13,7 @@ _DEFAULT_DB = f"sqlite+aiosqlite:///{_DB_PATH}"
 class Settings(BaseSettings):
     APP_NAME: str = "Diamond Accounting - Diamond Inventory"
     DATABASE_URL: str = _DEFAULT_DB
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "change-this-in-production-use-openssl-rand-hex-32")
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480  # 8 hours
     CORS_ORIGINS: str = ""  # Comma-separated origins for production

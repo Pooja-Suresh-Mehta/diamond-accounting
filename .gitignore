@@ -45,6 +45,7 @@ diamond_app_details/
 # Environment
 .env
 .env.*
+!.env.example
 
 # OS
 .DS_Store
