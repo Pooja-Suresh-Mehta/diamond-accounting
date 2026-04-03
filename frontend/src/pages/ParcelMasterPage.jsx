@@ -100,7 +100,7 @@ export default function ParcelMasterPage() {
   };
 
   const handleNewOption = (fieldKey, newVal) => {
-    const keyMap = { shape: 'shapes', color: 'colors', clarity: 'clarities', size: 'sizes', sieve: 'sieves' };
+    const keyMap = { shape: 'shapes', color: 'colors', clarity: 'clarities', size: 'sizes', sieve: 'sieves', stock_group: 'group_ids' };
     const optsKey = keyMap[fieldKey];
     if (optsKey) setOpts((prev) => ({ ...prev, [optsKey]: [...(prev[optsKey] || []), newVal] }));
   };
@@ -275,7 +275,7 @@ export default function ParcelMasterPage() {
           <CreatableField name="size" label="Size" value={form.size} onChange={setValue} options={opts.sizes} fieldKey="size" onNewOption={handleNewOption} />
           <CreatableField name="sieve_mm" label="Sieve / MM" value={form.sieve_mm} onChange={setValue} options={opts.sieves} fieldKey="sieve" onNewOption={handleNewOption} />
           <Field name="item_name" label="Stock Name" value={form.item_name} onChange={setValue} />
-          <Field name="stock_group_id" label="Stock GroupID" value={form.stock_group_id} onChange={setValue} options={opts.group_ids} />
+          <CreatableField name="stock_group_id" label="Stock GroupID" value={form.stock_group_id} onChange={setValue} options={opts.group_ids} fieldKey="stock_group" onNewOption={handleNewOption} />
           <div className="xl:col-span-2"><Field name="description" label="Description" value={form.description} onChange={setValue} rows={2} /></div>
         </div>
 

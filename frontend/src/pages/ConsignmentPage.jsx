@@ -72,6 +72,9 @@ export default function ConsignmentPage() {
 
   useEffect(() => {
     api.get('/consignment/options').then(r => setOpts(r.data)).catch(() => {});
+    const handleVisibility = () => { if (document.visibilityState === 'visible') api.get('/consignment/options').then(r => setOpts(r.data)).catch(() => {}); };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
   const fetchList = async () => {
@@ -107,6 +110,15 @@ export default function ConsignmentPage() {
         const def = getCurrencyDefaults(value);
         next.inr_rate = def.inr_rate;
         next.usd_rate = def.usd_rate;
+      }
+      if (name === 'due_days' || name === 'date') {
+        const d = name === 'date' ? value : next.date;
+        const days = name === 'due_days' ? Number(value) : Number(next.due_days);
+        if (d && days >= 0) {
+          const dt = new Date(d);
+          dt.setDate(dt.getDate() + days);
+          next.due_date = dt.toISOString().slice(0, 10);
+        }
       }
       if (['cgst_pct', 'sgst_pct', 'igst_pct', 'vat_pct'].includes(name)) {
         return { ...next, ...calculateTotals({ ...next, items: f.items }) };
@@ -230,7 +242,7 @@ export default function ConsignmentPage() {
     );
   }
 
-  const lots = (opts.lot_items || []).map(l => l.lot_no);
+  const lots = opts.lot_items || [];
 
   return (
     <div className="space-y-4">
@@ -271,7 +283,7 @@ export default function ConsignmentPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="bg-gray-50">
-              <tr>{['Lot #', 'Item', 'Shape', 'Color', 'Clarity', 'Size', 'Issue Cts', 'Reje%', 'Rejection', 'Sel.Cts', 'Pcs', 'Rate', 'Amount', ''].map(h => (
+              <tr>{['Item Name', 'Lot #', 'Shape', 'Color', 'Clarity', 'Size', 'Issue Cts', 'Reje%', 'Rejection', 'Sel.Cts', 'Pcs', 'Rate', 'Amount', ''].map(h => (
                 <th key={h} className="px-2 py-2 text-left font-medium text-gray-600 whitespace-nowrap">{h}</th>
               ))}</tr>
             </thead>
@@ -279,12 +291,12 @@ export default function ConsignmentPage() {
               {form.items.map((item, idx) => (
                 <tr key={idx} className="border-t">
                   {[
-                    { name: 'lot_number', opts: lots, w: '120px' },
-                    { name: 'item_name', w: '120px' },
-                    { name: 'shape', w: '80px' },
-                    { name: 'color', w: '60px' },
-                    { name: 'clarity', w: '60px' },
-                    { name: 'size', w: '80px' },
+                    { name: 'lot_number', lotOpts: lots, w: '160px' },
+                    { name: 'lot_number', w: '100px', readOnly: true, display: 'lot_number' },
+                    { name: 'shape', w: '80px', readOnly: true },
+                    { name: 'color', w: '60px', readOnly: true },
+                    { name: 'clarity', w: '60px', readOnly: true },
+                    { name: 'size', w: '80px', readOnly: true },
                     { name: 'issue_carats', type: 'number', w: '80px' },
                     { name: 'reje_pct', type: 'number', w: '60px' },
                     { name: 'rejection', type: 'number', w: '80px' },
@@ -292,9 +304,15 @@ export default function ConsignmentPage() {
                     { name: 'pcs', type: 'number', w: '60px' },
                     { name: 'rate', type: 'number', w: '80px' },
                     { name: 'amount', type: 'number', w: '100px', readOnly: true },
-                  ].map(({ name, opts: o, type = 'text', w, readOnly }) => (
-                    <td key={name} className="px-1 py-1" style={{ minWidth: w }}>
-                      {o ? (
+                  ].map(({ name, opts: o, lotOpts, type = 'text', w, readOnly }, colIdx) => (
+                    <td key={colIdx} className="px-1 py-1" style={{ minWidth: w }}>
+                      {lotOpts ? (
+                        <select value={item.lot_number || ''} onChange={e => handleItem(idx, 'lot_number', e.target.value)}
+                          className="w-full text-xs border border-gray-200 rounded px-1 py-1">
+                          <option value="">-- Select Item --</option>
+                          {lotOpts.map(lot => <option key={lot.lot_no} value={lot.lot_no}>{lot.item_name} ({lot.lot_no})</option>)}
+                        </select>
+                      ) : o ? (
                         <select value={item[name] || ''} onChange={e => handleItem(idx, name, e.target.value)}
                           className="w-full text-xs border border-gray-200 rounded px-1 py-1">
                           <option value="">--</option>

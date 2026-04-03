@@ -163,6 +163,9 @@ export default function PurchasePage() {
 
   useEffect(() => {
     loadOpts().catch(() => toast.error('Failed to load options'));
+    const handleVisibility = () => { if (document.visibilityState === 'visible') loadOpts().catch(() => {}); };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
   useEffect(() => { if (!isFormMode) loadRows().catch(() => toast.error('Failed to load purchases')); }, [search, isFormMode]);
   useEffect(() => {
@@ -193,6 +196,15 @@ export default function PurchasePage() {
           inrRate: next.inr_rate,
           aedRate: next.usd_rate,
         }));
+      }
+      if (name === 'due_days' || name === 'date') {
+        const d = name === 'date' ? value : next.date;
+        const days = name === 'due_days' ? Number(value) : Number(next.due_days);
+        if (d && days >= 0) {
+          const dt = new Date(d);
+          dt.setDate(dt.getDate() + days);
+          next.due_date = dt.toISOString().slice(0, 10);
+        }
       }
       return next;
     });
@@ -273,7 +285,7 @@ export default function PurchasePage() {
         ...form,
         items: activeItems.map((i) => {
           const { less1_sign, less2_sign, less3_sign, ...rest } = i;
-          return { ...rest };
+          return { ...rest, less1: Number(rest.less1 || 0), less2: Number(rest.less2 || 0), less3: Number(rest.less3 || 0) };
         }),
       };
       if (isEditMode) await api.put(`/parcel/purchase/${id}`, payload);
@@ -481,17 +493,17 @@ export default function PurchasePage() {
         <div className="border-t pt-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-semibold text-gray-700">Lot Number</h3>
-            <button onClick={() => navigate('/parcel-master/add')} className="px-3 py-1.5 text-sm border border-blue-500 text-blue-600 rounded">Add Parcel Master</button>
+            <button onClick={() => window.open('/parcel-master/add', '_blank')} className="px-3 py-1.5 text-sm border border-blue-500 text-blue-600 rounded">Add Parcel Master</button>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
             <div className="space-y-1 xl:col-span-2">
-              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Lot Number</label>
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Item Name</label>
               <select className="w-full px-2 py-2 border rounded" value={lotDraft.lot_number || ''} onChange={(e) => setLotFromMaster(e.target.value)}>
-                <option value="">Lot Number</option>
-                {(opts.lot_numbers || []).map((lot) => <option key={lot} value={lot}>{lot}</option>)}
+                <option value="">Select Item</option>
+                {(opts.lot_items || []).map((lot) => <option key={lot.lot_no} value={lot.lot_no}>{lot.item_name} ({lot.lot_no})</option>)}
               </select>
             </div>
-            <F label="Item Name" name="item_name" value={lotDraft.item_name} onChange={setItemValue} readOnly />
+            <F label="Lot Number" name="lot_number" value={lotDraft.lot_number} onChange={setItemValue} readOnly />
             <F label="Shape" name="shape" value={lotDraft.shape} onChange={setItemValue} readOnly />
             <F label="Color" name="color" value={lotDraft.color} onChange={setItemValue} readOnly />
             <F label="Clarity" name="clarity" value={lotDraft.clarity} onChange={setItemValue} readOnly />

@@ -22,11 +22,11 @@ export const INIT_LINE_ITEM = {
   rate: 0,
   usd_rate: 0,
   less1_sign: '-',
-  less1: 0,
+  less1: '',
   less2_sign: '-',
-  less2: 0,
+  less2: '',
   less3_sign: '+',
-  less3: 0,
+  less3: '',
   amount: 0,
 };
 
@@ -83,9 +83,12 @@ export const normalizeLineItem = (item, { currency, inrRate, aedRate, sourceFiel
   rejection = Math.min(Math.max(rejection, 0), issue);
   selected = Math.max(issue - rejection, 0);
   const rate = toNumber(item.rate);
-  const less1 = toNumber(item.less1);
-  const less2 = toNumber(item.less2);
-  const less3 = toNumber(item.less3);
+  const less1Raw = item.less1;
+  const less2Raw = item.less2;
+  const less3Raw = item.less3;
+  const less1 = toNumber(less1Raw);
+  const less2 = toNumber(less2Raw);
+  const less3 = toNumber(less3Raw);
   const less1Sign = item.less1_sign === '+' ? '+' : '-';
   const less2Sign = item.less2_sign === '+' ? '+' : '-';
   const less3Sign = item.less3_sign === '-' ? '-' : '+';
@@ -111,9 +114,9 @@ export const normalizeLineItem = (item, { currency, inrRate, aedRate, sourceFiel
     selected_carat: round2(selected),
     rate: round2(rate),
     usd_rate: round2(convertRateToUsd(rate, currency, inrRate, aedRate)),
-    less1: round2(less1),
-    less2: round2(less2),
-    less3: round2(less3),
+    less1: less1Raw === '' ? '' : round2(less1),
+    less2: less2Raw === '' ? '' : round2(less2),
+    less3: less3Raw === '' ? '' : round2(less3),
     amount: round2(amount),
   };
 };

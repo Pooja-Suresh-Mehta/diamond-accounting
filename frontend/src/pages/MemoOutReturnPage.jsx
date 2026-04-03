@@ -173,7 +173,12 @@ export default function MemoOutReturnPage() {
     setMemoSearch(base.source_memo_number || '');
   };
 
-  useEffect(() => { loadOpts().catch(() => toast.error('Failed to load options')); }, []);
+  useEffect(() => {
+    loadOpts().catch(() => toast.error('Failed to load options'));
+    const handleVisibility = () => { if (document.visibilityState === 'visible') loadOpts().catch(() => {}); };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
   useEffect(() => { if (!isFormMode) loadRows().catch(() => toast.error('Failed to load memo out returns')); }, [search, isFormMode]);
   useEffect(() => {
     if (isEditMode) loadEdit().catch(() => toast.error('Failed to load record'));
@@ -274,7 +279,9 @@ export default function MemoOutReturnPage() {
     try {
       const payload = {
         ...form,
-        items: form.items.map(({ less1_sign, less2_sign, less3_sign, ...rest }) => rest),
+        items: form.items.map(({ less1_sign, less2_sign, less3_sign, ...rest }) => ({
+          ...rest, less1: Number(rest.less1 || 0), less2: Number(rest.less2 || 0), less3: Number(rest.less3 || 0),
+        })),
       };
       if (isEditMode) await api.put(`/memo-out-return/${id}`, payload);
       else await api.post('/memo-out-return', payload);

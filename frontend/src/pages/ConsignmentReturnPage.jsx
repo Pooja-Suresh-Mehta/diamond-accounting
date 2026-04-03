@@ -71,6 +71,9 @@ export default function ConsignmentReturnPage() {
 
   useEffect(() => {
     api.get('/consignment-return/options').then(r => setOpts(r.data)).catch(() => {});
+    const handleVisibility = () => { if (document.visibilityState === 'visible') api.get('/consignment-return/options').then(r => setOpts(r.data)).catch(() => {}); };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
   const fetchList = async () => {
@@ -217,7 +220,7 @@ export default function ConsignmentReturnPage() {
     );
   }
 
-  const lots = (opts.lot_items || []).map(l => l.lot_no);
+  const lots = opts.lot_items || [];
 
   return (
     <div className="space-y-4">
@@ -251,7 +254,7 @@ export default function ConsignmentReturnPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead className="bg-gray-50">
-              <tr>{['Lot #', 'Item', 'Issue Cts', 'Reje%', 'Sel.Cts', 'Pcs', 'Rate', 'Amount', ''].map(h => (
+              <tr>{['Item Name', 'Lot #', 'Issue Cts', 'Reje%', 'Sel.Cts', 'Pcs', 'Rate', 'Amount', ''].map(h => (
                 <th key={h} className="px-2 py-2 text-left font-medium text-gray-600">{h}</th>
               ))}</tr>
             </thead>
@@ -259,17 +262,23 @@ export default function ConsignmentReturnPage() {
               {form.items.map((item, idx) => (
                 <tr key={idx} className="border-t">
                   {[
-                    { name: 'lot_number', opts: lots },
-                    { name: 'item_name' },
+                    { name: 'lot_number', lotOpts: lots },
+                    { name: 'lot_number', readOnly: true },
                     { name: 'issue_carats', type: 'number' },
                     { name: 'reje_pct', type: 'number' },
                     { name: 'selected_carat', type: 'number' },
                     { name: 'pcs', type: 'number' },
                     { name: 'rate', type: 'number' },
                     { name: 'amount', type: 'number', readOnly: true },
-                  ].map(({ name, opts: o, type = 'text', readOnly }) => (
-                    <td key={name} className="px-1 py-1" style={{ minWidth: '80px' }}>
-                      {o ? (
+                  ].map(({ name, opts: o, lotOpts, type = 'text', readOnly }, colIdx) => (
+                    <td key={colIdx} className="px-1 py-1" style={{ minWidth: '80px' }}>
+                      {lotOpts ? (
+                        <select value={item.lot_number || ''} onChange={e => handleItem(idx, 'lot_number', e.target.value)}
+                          className="w-full text-xs border border-gray-200 rounded px-1 py-1">
+                          <option value="">-- Select Item --</option>
+                          {lotOpts.map(lot => <option key={lot.lot_no} value={lot.lot_no}>{lot.item_name} ({lot.lot_no})</option>)}
+                        </select>
+                      ) : o ? (
                         <select value={item[name] || ''} onChange={e => handleItem(idx, name, e.target.value)}
                           className="w-full text-xs border border-gray-200 rounded px-1 py-1">
                           <option value="">--</option>
