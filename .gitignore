@@ -64,3 +64,7 @@ build/
 
 .claude/
 .logs/
+
+# Portable build output
+portable/PoojanGems_Portable/
+portable/PoojanGems_Portable.zip

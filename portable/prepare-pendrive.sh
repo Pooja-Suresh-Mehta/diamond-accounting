@@ -55,6 +55,8 @@ cp "$SCRIPT_DIR/start.bat" "$OUTPUT/"
 cp "$SCRIPT_DIR/run.bat" "$OUTPUT/"
 cp "$SCRIPT_DIR/start.sh" "$OUTPUT/"
 cp "$SCRIPT_DIR/setup-windows.bat" "$OUTPUT/"
+cp "$SCRIPT_DIR/build-exe.bat" "$OUTPUT/"
+cp "$SCRIPT_DIR/launcher.py" "$OUTPUT/"
 chmod +x "$OUTPUT/start.sh"
 
 # ── 4. Copy existing database ───────────────────────────

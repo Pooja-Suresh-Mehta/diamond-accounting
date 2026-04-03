@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { LayoutDashboard, Search, LogOut, Diamond, Menu, X, BookOpenText, FolderTree, ChevronDown, ChevronRight, Moon, Sun, Boxes, Banknote, BarChart2, Wrench, Users } from 'lucide-react';
+import { LayoutDashboard, Search, LogOut, Diamond, Menu, X, BookOpenText, FolderTree, ChevronDown, ChevronRight, Moon, Sun, Boxes, Banknote, BarChart2, Wrench, Users, HardDrive } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const navItems = [
@@ -248,6 +248,16 @@ export default function Layout() {
           >
             <Wrench className="w-5 h-5" />
             Utilities
+          </NavLink>
+
+          {/* Backup & Restore */}
+          <NavLink
+            to="/backup"
+            onClick={() => setSidebarOpen(false)}
+            className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
+          >
+            <HardDrive className="w-5 h-5" />
+            Backup & Restore
           </NavLink>
 
           {/* Admin: User Management */}
