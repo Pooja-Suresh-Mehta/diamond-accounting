@@ -123,7 +123,7 @@ async def get_purchase_options(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    CUSTOMER_TYPES = ["customer", "overseas customer", "individual"]
+    CUSTOMER_TYPES = ["customer", "overseas customer", "individual", "supplier", "overseas supplier"]
     parties = (await db.execute(
         select(AccountMaster.account_group_name)
         .where(
