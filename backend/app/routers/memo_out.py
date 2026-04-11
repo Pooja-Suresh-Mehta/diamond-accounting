@@ -52,7 +52,7 @@ async def get_options(
         "lot_numbers": [r.lot_no for r in parcel_rows if r.lot_no],
         "lot_items": [{
             "lot_no": r.lot_no, "item_name": r.item_name,
-            "opening_weight_carats": r.opening_weight_carats, "opening_pcs": r.opening_pcs,
+            "opening_weight_carats": r.opening_weight_carats,
             "purchase_cost_usd_amount": r.purchase_cost_usd_amount,
         } for r in parcel_rows if r.lot_no],
         "payment_statuses": PAYMENT_STATUSES,
