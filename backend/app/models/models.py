@@ -367,6 +367,8 @@ class ParcelMaster(Base):
 
     purchase_cost_usd_amount = Column(Float, default=0)
     purchase_cost_inr_amount = Column(Float, default=0)
+    purchase_cost_inr_carat = Column(Float, default=0)
+    purchase_cost_usd_carat = Column(Float, default=0)
     asking_price_usd_carats = Column(Float, default=0)
     asking_usd_amount = Column(Float, default=0)
     asking_price_inr_carats = Column(Float, default=0)

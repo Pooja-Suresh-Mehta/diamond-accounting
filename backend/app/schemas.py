@@ -340,6 +340,8 @@ class ParcelMasterBase(BaseModel):
     purchase_price_currency: str = "USD"
     purchase_cost_usd_amount: float = 0.0
     purchase_cost_inr_amount: float = 0.0
+    purchase_cost_inr_carat: float = 0.0
+    purchase_cost_usd_carat: float = 0.0
     asking_price_usd_carats: float = 0.0
     asking_usd_amount: float = 0.0
     asking_price_inr_carats: float = 0.0

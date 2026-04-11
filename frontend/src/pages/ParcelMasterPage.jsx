@@ -25,6 +25,8 @@ const INIT = {
   usd_to_inr_rate: 0.0,
   purchase_cost_usd_amount: 0.0,
   purchase_cost_inr_amount: 0.0,
+  purchase_cost_inr_carat: 0.0,
+  purchase_cost_usd_carat: 0.0,
   asking_price_usd_carats: 0.0,
   asking_usd_amount: 0.0,
   asking_price_inr_carats: 0.0,
@@ -34,6 +36,7 @@ const INIT = {
 const numericFields = new Set([
   'opening_weight_carats', 'purchase_price', 'usd_to_inr_rate',
   'purchase_cost_usd_amount', 'purchase_cost_inr_amount',
+  'purchase_cost_inr_carat', 'purchase_cost_usd_carat',
   'asking_price_usd_carats', 'asking_usd_amount',
   'asking_price_inr_carats', 'asking_inr_amount',
 ]);
@@ -141,6 +144,8 @@ export default function ParcelMasterPage() {
 
     const D = isINR ? A * B : A * B * C;                          // Purchase/Cost INR Amount
     const E = isUSD ? A * B : (C !== 0 ? (A * B) / C : 0);       // Purchase/Cost USD Amount
+    const J = isINR ? B : (C !== 0 ? B / C : 0);                  // Purchase/Cost INR/Carat
+    const K = isUSD ? B : B * C;                                   // Purchase/Cost USD/Carat
     const F = isINR ? B * 1.06 : B * 1.06 * C;                   // Asking Price INR/Carats
     const G = isUSD ? B * 1.06 : (C !== 0 ? (B * 1.06) / C : 0); // Asking Price USD/Carats
     const H = D * 1.06;                                            // Asking INR Amount
@@ -150,6 +155,8 @@ export default function ParcelMasterPage() {
       ...p,
       purchase_cost_inr_amount: Number(D.toFixed(2)),
       purchase_cost_usd_amount: Number(E.toFixed(2)),
+      purchase_cost_inr_carat: Number(J.toFixed(2)),
+      purchase_cost_usd_carat: Number(K.toFixed(2)),
       asking_price_inr_carats: Number(F.toFixed(2)),
       asking_price_usd_carats: Number(G.toFixed(2)),
       asking_inr_amount: Number(H.toFixed(2)),
@@ -300,36 +307,58 @@ export default function ParcelMasterPage() {
           <Field name="grown_process_type" label="Grown/Process Type" value={form.grown_process_type} onChange={setValue} options={opts.grown_process_types} />
         </div>
 
-        <div className="border-t pt-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
-          <Field name="opening_weight_carats" label="Opening Weight/Carats" value={form.opening_weight_carats} onChange={setValue} />
-          <div className="space-y-1">
-            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Purchase Price</label>
-            <div className="flex">
-              <input
-                type="number"
-                value={form.purchase_price ?? ''}
-                onChange={(e) => setValue('purchase_price', e.target.value === '' ? '' : Number(e.target.value))}
-                onFocus={(e) => { if (Number(e.target.value) === 0) setValue('purchase_price', ''); }}
-                onBlur={(e) => { if (e.target.value === '') setValue('purchase_price', 0); }}
-                className="flex-1 min-w-0 px-3 py-2 text-sm border border-r-0 border-gray-300 rounded-l-md focus:ring-1 focus:ring-blue-500 outline-none"
-              />
-              <select
-                value={form.purchase_price_currency}
-                onChange={(e) => setValue('purchase_price_currency', e.target.value)}
-                className="px-2 py-2 text-sm border border-gray-300 rounded-r-md bg-gray-50 focus:ring-1 focus:ring-blue-500 outline-none"
-              >
-                <option value="USD">USD</option>
-                <option value="INR">INR</option>
-              </select>
+        <div className="border-t pt-5 space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <Field name="opening_weight_carats" label="Opening Weight/Carats" value={form.opening_weight_carats} onChange={setValue} />
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Purchase Price</label>
+              <div className="flex">
+                <input
+                  type="number"
+                  value={form.purchase_price ?? ''}
+                  onChange={(e) => setValue('purchase_price', e.target.value === '' ? '' : Number(e.target.value))}
+                  onFocus={(e) => { if (Number(e.target.value) === 0) setValue('purchase_price', ''); }}
+                  onBlur={(e) => { if (e.target.value === '') setValue('purchase_price', 0); }}
+                  className="flex-1 min-w-0 px-3 py-2 text-sm border border-r-0 border-gray-300 rounded-l-md focus:ring-1 focus:ring-blue-500 outline-none"
+                />
+                <select
+                  value={form.purchase_price_currency}
+                  onChange={(e) => setValue('purchase_price_currency', e.target.value)}
+                  className="px-2 py-2 text-sm border border-gray-300 rounded-r-md bg-gray-50 focus:ring-1 focus:ring-blue-500 outline-none"
+                >
+                  <option value="USD">USD</option>
+                  <option value="INR">INR</option>
+                </select>
+              </div>
+            </div>
+            <Field name="usd_to_inr_rate" label="USD to INR Rate" value={form.usd_to_inr_rate} onChange={setValue} />
+          </div>
+
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+            <div className="flex-1 p-4 bg-amber-50/40">
+              <div className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> INR
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Field name="purchase_cost_inr_amount" label="Cost INR Amount" value={form.purchase_cost_inr_amount} onChange={setValue} readOnly />
+                <Field name="purchase_cost_inr_carat" label="Cost INR/Carat" value={form.purchase_cost_inr_carat} onChange={setValue} readOnly />
+                <Field name="asking_price_inr_carats" label="Asking Price INR/Carat" value={form.asking_price_inr_carats} onChange={setValue} readOnly />
+                <Field name="asking_inr_amount" label="Asking INR Amount" value={form.asking_inr_amount} onChange={setValue} readOnly />
+              </div>
+            </div>
+            <div className="w-px bg-gray-300 self-stretch" />
+            <div className="flex-1 p-4 bg-emerald-50/40">
+              <div className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> USD
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Field name="purchase_cost_usd_amount" label="Cost USD Amount" value={form.purchase_cost_usd_amount} onChange={setValue} readOnly />
+                <Field name="purchase_cost_usd_carat" label="Cost USD/Carat" value={form.purchase_cost_usd_carat} onChange={setValue} readOnly />
+                <Field name="asking_price_usd_carats" label="Asking Price USD/Carat" value={form.asking_price_usd_carats} onChange={setValue} readOnly />
+                <Field name="asking_usd_amount" label="Asking USD Amount" value={form.asking_usd_amount} onChange={setValue} readOnly />
+              </div>
             </div>
           </div>
-          <Field name="usd_to_inr_rate" label="USD to INR Rate" value={form.usd_to_inr_rate} onChange={setValue} />
-          <Field name="purchase_cost_inr_amount" label="Purchase/Cost INR Amount" value={form.purchase_cost_inr_amount} onChange={setValue} readOnly />
-          <Field name="purchase_cost_usd_amount" label="Purchase/Cost USD Amount" value={form.purchase_cost_usd_amount} onChange={setValue} readOnly />
-          <Field name="asking_price_inr_carats" label="Asking Price INR/Carats" value={form.asking_price_inr_carats} onChange={setValue} readOnly />
-          <Field name="asking_price_usd_carats" label="Asking Price USD/Carats" value={form.asking_price_usd_carats} onChange={setValue} readOnly />
-          <Field name="asking_inr_amount" label="Asking INR Amount" value={form.asking_inr_amount} onChange={setValue} readOnly />
-          <Field name="asking_usd_amount" label="Asking USD Amount" value={form.asking_usd_amount} onChange={setValue} readOnly />
         </div>
       </div>
     </div>
