@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+import re
 
 from app.auth import get_current_user
 from app.database import get_db
@@ -108,6 +109,22 @@ async def list_parcels(
     q = q.order_by(ParcelMaster.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
     rows = (await db.execute(q)).scalars().all()
     return [ParcelMasterOut.model_validate(r) for r in rows]
+
+
+@router.get("/next-lot")
+async def next_lot_number(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    lot_nos = (await db.execute(
+        select(ParcelMaster.lot_no).where(ParcelMaster.company_id == current_user.company_id)
+    )).scalars().all()
+    max_num = 0
+    for lot in lot_nos:
+        m = re.search(r'(\d+)$', lot.strip())
+        if m:
+            max_num = max(max_num, int(m.group(1)))
+    return {"lot_no": f"{max_num + 1:04d}"}
 
 
 @router.get("/{parcel_id}", response_model=ParcelMasterOut)

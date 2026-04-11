@@ -59,11 +59,14 @@ function Field({ name, label, value, onChange, options = [], rows = 1, readOnly 
       </div>
     );
   }
-  const type = numericFields.has(name) ? 'number' : 'text';
+  const isNum = numericFields.has(name);
+  const type = isNum ? 'number' : 'text';
+  const handleFocus = isNum && !readOnly ? (e) => { if (Number(e.target.value) === 0) onChange(name, ''); } : undefined;
+  const handleBlur = isNum && !readOnly ? (e) => { if (e.target.value === '') onChange(name, 0); } : undefined;
   return (
     <div className="space-y-1">
       <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
-      <input type={type} value={value ?? ''} onChange={(e) => onChange(name, e.target.value)} readOnly={readOnly} className={cls} />
+      <input type={type} value={value ?? ''} onChange={(e) => onChange(name, e.target.value)} onFocus={handleFocus} onBlur={handleBlur} readOnly={readOnly} className={cls} />
     </div>
   );
 }
@@ -114,7 +117,12 @@ export default function ParcelMasterPage() {
   }, [search, isFormMode]);
   useEffect(() => {
     if (isEditMode) loadEdit().catch(() => toast.error('Failed to load parcel item'));
-    if (isAddMode) setForm(INIT);
+    if (isAddMode) {
+      setForm(INIT);
+      api.get('/parcel-master/next-lot').then((res) => {
+        setForm((p) => ({ ...p, lot_no: res.data.lot_no }));
+      }).catch(() => {});
+    }
   }, [isEditMode, isAddMode, id]);
 
   useEffect(() => {
@@ -301,6 +309,8 @@ export default function ParcelMasterPage() {
                 type="number"
                 value={form.purchase_price ?? ''}
                 onChange={(e) => setValue('purchase_price', e.target.value === '' ? '' : Number(e.target.value))}
+                onFocus={(e) => { if (Number(e.target.value) === 0) setValue('purchase_price', ''); }}
+                onBlur={(e) => { if (e.target.value === '') setValue('purchase_price', 0); }}
                 className="flex-1 min-w-0 px-3 py-2 text-sm border border-r-0 border-gray-300 rounded-l-md focus:ring-1 focus:ring-blue-500 outline-none"
               />
               <select
