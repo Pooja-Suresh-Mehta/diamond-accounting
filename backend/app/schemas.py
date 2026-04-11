@@ -335,11 +335,10 @@ class ParcelMasterBase(BaseModel):
     stock_subtype: str = "Polished"
     grown_process_type: str = "Natural"
     opening_weight_carats: float = 0.0
-    opening_pcs: int = 0
     usd_to_inr_rate: float = 0.0
-    purchase_cost_price_usd_carats: float = 0.0
+    purchase_price: float = 0.0
+    purchase_price_currency: str = "USD"
     purchase_cost_usd_amount: float = 0.0
-    purchase_cost_price_inr_carats: float = 0.0
     purchase_cost_inr_amount: float = 0.0
     asking_price_usd_carats: float = 0.0
     asking_usd_amount: float = 0.0

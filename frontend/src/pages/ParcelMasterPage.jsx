@@ -20,11 +20,10 @@ const INIT = {
   stock_subtype: 'Polished',
   grown_process_type: 'Natural',
   opening_weight_carats: 0.0,
-  opening_pcs: 0,
+  purchase_price: 0.0,
+  purchase_price_currency: 'USD',
   usd_to_inr_rate: 0.0,
-  purchase_cost_price_usd_carats: 0.0,
   purchase_cost_usd_amount: 0.0,
-  purchase_cost_price_inr_carats: 0.0,
   purchase_cost_inr_amount: 0.0,
   asking_price_usd_carats: 0.0,
   asking_usd_amount: 0.0,
@@ -33,9 +32,8 @@ const INIT = {
 };
 
 const numericFields = new Set([
-  'opening_weight_carats', 'opening_pcs', 'usd_to_inr_rate',
-  'purchase_cost_price_usd_carats', 'purchase_cost_usd_amount',
-  'purchase_cost_price_inr_carats', 'purchase_cost_inr_amount',
+  'opening_weight_carats', 'purchase_price', 'usd_to_inr_rate',
+  'purchase_cost_usd_amount', 'purchase_cost_inr_amount',
   'asking_price_usd_carats', 'asking_usd_amount',
   'asking_price_inr_carats', 'asking_inr_amount',
 ]);
@@ -127,20 +125,29 @@ export default function ParcelMasterPage() {
 
   useEffect(() => {
     if (!isFormMode) return;
-    const rate = Number(form.usd_to_inr_rate || 0);
-    const weight = Number(form.opening_weight_carats || 0);
-    const purUsd = Number(form.purchase_cost_price_usd_carats || 0);
-    const askUsd = Number(form.asking_price_usd_carats || 0);
-    const purchaseInrCarat = rate * purUsd;
-    const askingInrCarat = rate * askUsd;
+    const A = Number(form.opening_weight_carats || 0);
+    const B = Number(form.purchase_price || 0);
+    const C = Number(form.usd_to_inr_rate || 0);
+    const isINR = form.purchase_price_currency === 'INR';
+    const isUSD = form.purchase_price_currency === 'USD';
+
+    const D = isINR ? A * B : A * B * C;                          // Purchase/Cost INR Amount
+    const E = isUSD ? A * B : (C !== 0 ? (A * B) / C : 0);       // Purchase/Cost USD Amount
+    const F = isINR ? B * 1.06 : B * 1.06 * C;                   // Asking Price INR/Carats
+    const G = isUSD ? B * 1.06 : (C !== 0 ? (B * 1.06) / C : 0); // Asking Price USD/Carats
+    const H = D * 1.06;                                            // Asking INR Amount
+    const I = E * 1.06;                                            // Asking USD Amount
+
     setForm((p) => ({
       ...p,
-      purchase_cost_price_inr_carats: Number(purchaseInrCarat.toFixed(2)),
-      purchase_cost_inr_amount: Number((purchaseInrCarat * weight).toFixed(2)),
-      asking_price_inr_carats: Number(askingInrCarat.toFixed(2)),
-      asking_inr_amount: Number((askingInrCarat * weight).toFixed(2)),
+      purchase_cost_inr_amount: Number(D.toFixed(2)),
+      purchase_cost_usd_amount: Number(E.toFixed(2)),
+      asking_price_inr_carats: Number(F.toFixed(2)),
+      asking_price_usd_carats: Number(G.toFixed(2)),
+      asking_inr_amount: Number(H.toFixed(2)),
+      asking_usd_amount: Number(I.toFixed(2)),
     }));
-  }, [form.usd_to_inr_rate, form.purchase_cost_price_usd_carats, form.asking_price_usd_carats, form.opening_weight_carats, isFormMode]);
+  }, [form.opening_weight_carats, form.purchase_price, form.purchase_price_currency, form.usd_to_inr_rate, isFormMode]);
 
   const setValue = (name, value) => {
     if (numericFields.has(name)) {
@@ -287,16 +294,32 @@ export default function ParcelMasterPage() {
 
         <div className="border-t pt-5 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
           <Field name="opening_weight_carats" label="Opening Weight/Carats" value={form.opening_weight_carats} onChange={setValue} />
-          <Field name="opening_pcs" label="Opening Pcs" value={form.opening_pcs} onChange={setValue} />
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Purchase Price</label>
+            <div className="flex">
+              <input
+                type="number"
+                value={form.purchase_price ?? ''}
+                onChange={(e) => setValue('purchase_price', e.target.value === '' ? '' : Number(e.target.value))}
+                className="flex-1 min-w-0 px-3 py-2 text-sm border border-r-0 border-gray-300 rounded-l-md focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+              <select
+                value={form.purchase_price_currency}
+                onChange={(e) => setValue('purchase_price_currency', e.target.value)}
+                className="px-2 py-2 text-sm border border-gray-300 rounded-r-md bg-gray-50 focus:ring-1 focus:ring-blue-500 outline-none"
+              >
+                <option value="USD">USD</option>
+                <option value="INR">INR</option>
+              </select>
+            </div>
+          </div>
           <Field name="usd_to_inr_rate" label="USD to INR Rate" value={form.usd_to_inr_rate} onChange={setValue} />
-          <Field name="purchase_cost_price_usd_carats" label="Purchase/Cost Price USD/Carats" value={form.purchase_cost_price_usd_carats} onChange={setValue} />
-          <Field name="purchase_cost_usd_amount" label="Purchase/Cost USD Amount" value={form.purchase_cost_usd_amount} onChange={setValue} />
-          <Field name="purchase_cost_price_inr_carats" label="Purchase/Cost Price INR/Carats" value={form.purchase_cost_price_inr_carats} onChange={setValue} />
-          <Field name="purchase_cost_inr_amount" label="Purchase/Cost INR Amount" value={form.purchase_cost_inr_amount} onChange={setValue} />
-          <Field name="asking_price_usd_carats" label="Asking Price USD/Carats" value={form.asking_price_usd_carats} onChange={setValue} />
-          <Field name="asking_usd_amount" label="Asking USD Amount" value={form.asking_usd_amount} onChange={setValue} />
+          <Field name="purchase_cost_inr_amount" label="Purchase/Cost INR Amount" value={form.purchase_cost_inr_amount} onChange={setValue} readOnly />
+          <Field name="purchase_cost_usd_amount" label="Purchase/Cost USD Amount" value={form.purchase_cost_usd_amount} onChange={setValue} readOnly />
           <Field name="asking_price_inr_carats" label="Asking Price INR/Carats" value={form.asking_price_inr_carats} onChange={setValue} readOnly />
+          <Field name="asking_price_usd_carats" label="Asking Price USD/Carats" value={form.asking_price_usd_carats} onChange={setValue} readOnly />
           <Field name="asking_inr_amount" label="Asking INR Amount" value={form.asking_inr_amount} onChange={setValue} readOnly />
+          <Field name="asking_usd_amount" label="Asking USD Amount" value={form.asking_usd_amount} onChange={setValue} readOnly />
         </div>
       </div>
     </div>
