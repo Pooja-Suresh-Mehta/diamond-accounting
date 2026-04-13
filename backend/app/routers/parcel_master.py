@@ -4,33 +4,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import re
 
 from app.auth import get_current_user
+from app.constants import (
+    DEFAULT_SHAPES as SHAPES,
+    DEFAULT_COLORS as COLORS,
+    DEFAULT_CLARITIES as CLARITIES,
+    DEFAULT_SIZES as SIZES,
+    DEFAULT_SIEVES as SIEVES,
+    DEFAULT_STOCK_GROUPS as STOCK_GROUP_IDS,
+)
 from app.database import get_db
 from app.models.models import DropdownOption, ParcelMaster, User
 from app.schemas import ParcelMasterCreate, ParcelMasterOut, ParcelMasterUpdate
 
 router = APIRouter(prefix="/api/parcel-master", tags=["parcel-master"])
-
-SHAPES = sorted([
-    "Baguette", "Cushion", "Emerald", "Heart", "Marquise", "Oval",
-    "Pear", "Princess", "Radiant", "Round", "Taper", "Triangle",
-])
-COLORS = [
-    "G+", "G-", "White", "OW", "NW", "LB", "OWLC", "NWLC", "LC", "OWLB", "NWLB",
-    "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "MIX",
-]
-CLARITIES = [
-    "SJEW", "DLX", "DLXAA", "CWP", "REJ", "COLL",
-    "FL", "IF", "VVS1", "VVS2", "VS1", "VS2", "SI1", "SI2", "SI3", "I1", "I2", "I3",
-]
-SIZES = [
-    "0.18 DOWN", "0.18 UP", "0.23 UP", "0.30 UP", "0.40 UP", "0.50 UP",
-    "0.70 UP", "0.80 UP", "0.90 UP", "1.00 UP", "1.50 UP", "2.00 UP",
-    "2.50 UP", "3.00 UP", "5.00 UP",
-]
-SIEVES = ["-000", "+000", "000-2", "2-6", "6-9", "9-11", "11 UP",
-          "-2.0", "+2.0", "+2.5", "+3.0", "+3.5", "+4.0", "+4.5", "+5.0", "+6.0",
-          "-7", "+7", "1/10", "1/6", "1/5", "1/4", "1/3", "3/8"]
-STOCK_GROUP_IDS = ["TPBG", "PMQ", "OFC", "ROUND"]
 
 
 def _merge(defaults: list[str], custom: list[str]) -> list[str]:

@@ -26,6 +26,7 @@ import UtilitiesPage from './pages/UtilitiesPage';
 import ParcelModulePage from './pages/ParcelModulePage';
 import UsersPage from './pages/UsersPage';
 import BackupRestorePage from './pages/BackupRestorePage';
+import ManageDropdownsPage from './pages/ManageDropdownsPage';
 import Layout from './components/Layout';
 
 class AppErrorBoundary extends React.Component {
@@ -144,6 +145,7 @@ function AppRoutes() {
 
         {/* Utilities */}
         <Route path="utilities" element={<UtilitiesPage />} />
+        <Route path="dropdown-options" element={<ManageDropdownsPage />} />
         <Route path="backup" element={<BackupRestorePage />} />
 
         {/* Admin: User Management */}

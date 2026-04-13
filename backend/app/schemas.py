@@ -204,6 +204,14 @@ class DashboardStats(BaseModel):
 TokenResponse.model_rebuild()
 
 
+# ── Dropdown Options ──────────────────────────────────
+
+class DropdownRenameRequest(BaseModel):
+    field_name: str
+    old_value: str
+    new_value: str
+
+
 # ── Account Master ──────────────────────────────────────
 
 class AccountMasterBase(BaseModel):

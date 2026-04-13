@@ -17,7 +17,7 @@ from app.utils import (
 
 router = APIRouter(prefix="/api/memo-out-return", tags=["memo-out-return"])
 
-CUSTOMER_TYPES = ["customer", "overseas customer", "individual"]
+CUSTOMER_TYPES = ["customer", "overseas customer", "individual", "supplier", "overseas supplier"]
 
 
 def _calc_totals(row: MemoOutReturn):

@@ -17,7 +17,7 @@ from app.utils import (
 
 router = APIRouter(prefix="/api/sale", tags=["sale"])
 
-CUSTOMER_TYPES = ["customer", "overseas customer", "individual"]
+CUSTOMER_TYPES = ["customer", "overseas customer", "individual", "supplier", "overseas supplier"]
 
 
 def _calc_totals(row: Sale):
@@ -53,7 +53,7 @@ async def get_options(
         "lot_items": [{
             "lot_no": r.lot_no, "item_name": r.item_name, "shape": r.shape,
             "color": r.color, "clarity": r.clarity, "size": r.size, "sieve_mm": r.sieve_mm,
-            "opening_weight_carats": r.opening_weight_carats, "opening_pcs": r.opening_pcs,
+            "opening_weight_carats": r.opening_weight_carats,
             "purchase_cost_usd_amount": r.purchase_cost_usd_amount,
             "purchase_cost_price_usd_carats": r.purchase_cost_price_usd_carats,
         } for r in parcel_rows if r.lot_no],

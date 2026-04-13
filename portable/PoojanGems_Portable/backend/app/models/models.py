@@ -351,8 +351,9 @@ class ParcelMaster(Base):
     grown_process_type = Column(String(100), default="Natural")
 
     opening_weight_carats = Column(Float, default=0)
-    opening_pcs = Column(Integer, default=0)
     usd_to_inr_rate = Column(Float, default=0)
+    purchase_price = Column(Float, default=0)
+    purchase_price_currency = Column(String(3), default="USD")
 
     # Running balance fields (updated by transactions)
     purchased_weight = Column(Float, default=0)
@@ -364,10 +365,10 @@ class ParcelMaster(Base):
     consignment_weight = Column(Float, default=0)
     consignment_pcs = Column(Integer, default=0)
 
-    purchase_cost_price_usd_carats = Column(Float, default=0)
     purchase_cost_usd_amount = Column(Float, default=0)
-    purchase_cost_price_inr_carats = Column(Float, default=0)
     purchase_cost_inr_amount = Column(Float, default=0)
+    purchase_cost_inr_carat = Column(Float, default=0)
+    purchase_cost_usd_carat = Column(Float, default=0)
     asking_price_usd_carats = Column(Float, default=0)
     asking_usd_amount = Column(Float, default=0)
     asking_price_inr_carats = Column(Float, default=0)

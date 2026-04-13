@@ -17,12 +17,12 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 
+IS_FROZEN = getattr(sys, 'frozen', False)
+
 # ── Paths ────────────────────────────────────────────────
-if getattr(sys, 'frozen', False):
-    # Running as PyInstaller .exe
+if IS_FROZEN:
     APP_DIR = Path(sys.executable).parent
 else:
-    # Running as .py script
     APP_DIR = Path(__file__).parent
 
 BACKEND_DIR = APP_DIR / "backend"
@@ -44,14 +44,16 @@ server_process = None
 
 def backup_db(tag=""):
     """Copy database to local backup folder."""
-    if not DB_FILE.exists():
-        return
-    LOCAL_BACKUP.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    suffix = f"_{tag}" if tag else ""
-    dest = LOCAL_BACKUP / f"backup_{ts}{suffix}.db"
-    shutil.copy2(DB_FILE, dest)
-    print(f"[Backup] Saved to {dest}")
+    try:
+        if not DB_FILE.exists():
+            return
+        LOCAL_BACKUP.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        suffix = f"_{tag}" if tag else ""
+        dest = LOCAL_BACKUP / f"backup_{ts}{suffix}.db"
+        shutil.copy2(DB_FILE, dest)
+    except Exception:
+        pass
 
 
 def write_env():
@@ -78,10 +80,57 @@ def find_python():
         return str(venv_py)
 
     # 3. Current Python (if running as .py, not .exe)
-    if not getattr(sys, 'frozen', False):
+    if not IS_FROZEN:
         return sys.executable
 
     return None
+
+
+def is_port_busy():
+    """Check if the port is already in use."""
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(("127.0.0.1", PORT)) == 0
+
+
+def kill_existing_server():
+    """Kill any leftover process on the port."""
+    if not is_port_busy():
+        return
+
+    try:
+        if sys.platform == "win32":
+            # findstr is more reliable than parsing full netstat output
+            result = subprocess.run(
+                f"netstat -ano | findstr :{PORT} | findstr LISTENING",
+                capture_output=True, text=True, timeout=5, shell=True,
+            )
+            for line in result.stdout.strip().splitlines():
+                parts = line.split()
+                if parts:
+                    pid = parts[-1]
+                    try:
+                        int(pid)
+                        subprocess.run(["taskkill", "/F", "/PID", pid],
+                                       capture_output=True, timeout=5)
+                    except (ValueError, Exception):
+                        pass
+        else:
+            result = subprocess.run(
+                ["lsof", "-ti", f":{PORT}"],
+                capture_output=True, text=True, timeout=5,
+            )
+            for pid in result.stdout.strip().splitlines():
+                subprocess.run(["kill", "-9", pid], capture_output=True, timeout=5)
+    except Exception:
+        pass
+
+    # Wait for port to be released (up to 5 seconds)
+    for _ in range(10):
+        if not is_port_busy():
+            return
+        time.sleep(0.5)
+
 
 
 def start_server():
@@ -129,7 +178,6 @@ def start_server():
         except Exception:
             time.sleep(1)
             if server_process.poll() is not None:
-                # Server crashed
                 stderr = server_process.stderr.read().decode() if server_process.stderr else ""
                 show_error(f"Server failed to start:\n{stderr[:500]}")
                 return False
@@ -154,95 +202,106 @@ def stop_server():
 
 
 def show_error(msg):
-    """Show error message box."""
+    """Show error as a popup (Windows) or print (Mac/Linux)."""
     if sys.platform == "win32":
-        import ctypes
-        ctypes.windll.user32.MessageBoxW(0, msg, "Poojan Gems - Error", 0x10)
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, msg, "Poojan Gems - Error", 0x10)
+        except Exception:
+            pass
     else:
         print(f"[ERROR] {msg}")
 
 
+def show_info(msg):
+    """Show info as a popup (Windows) or print (Mac/Linux)."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, msg, "Poojan Gems", 0x40)
+        except Exception:
+            pass
+    else:
+        print(msg)
+
+
 def run_with_tray():
     """Run with system tray icon (if pystray available)."""
-    try:
-        import pystray
-        from PIL import Image, ImageDraw
+    import pystray
+    from PIL import Image, ImageDraw
 
-        # Create a simple diamond icon
-        def create_icon():
-            img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-            draw = ImageDraw.Draw(img)
-            # Diamond shape
-            points = [(32, 4), (60, 28), (32, 60), (4, 28)]
-            draw.polygon(points, fill=(59, 130, 246), outline=(30, 64, 175))
-            # Inner highlight
-            points2 = [(32, 14), (50, 28), (32, 48), (14, 28)]
-            draw.polygon(points2, fill=(96, 165, 250))
-            return img
+    def create_icon():
+        img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        points = [(32, 4), (60, 28), (32, 60), (4, 28)]
+        draw.polygon(points, fill=(59, 130, 246), outline=(30, 64, 175))
+        points2 = [(32, 14), (50, 28), (32, 48), (14, 28)]
+        draw.polygon(points2, fill=(96, 165, 250))
+        return img
 
-        def on_open(icon, item):
-            webbrowser.open(URL)
+    def on_open(icon, item):
+        webbrowser.open(URL)
 
-        def on_quit(icon, item):
-            icon.stop()
+    def on_quit(icon, item):
+        icon.stop()
 
-        icon = pystray.Icon(
-            "poojan_gems",
-            create_icon(),
-            "Poojan Gems - Diamond Accounting",
-            menu=pystray.Menu(
-                pystray.MenuItem("Open in Browser", on_open, default=True),
-                pystray.MenuItem(f"Running on {URL}", None, enabled=False),
-                pystray.Menu.SEPARATOR,
-                pystray.MenuItem("Quit", on_quit),
-            ),
-        )
-        icon.run()
-
-    except ImportError:
-        # No pystray/PIL — fall back to simple wait
-        run_without_tray()
+    icon = pystray.Icon(
+        "poojan_gems",
+        create_icon(),
+        "Poojan Gems - Diamond Accounting",
+        menu=pystray.Menu(
+            pystray.MenuItem("Open in Browser", on_open, default=True),
+            pystray.MenuItem(f"Running on {URL}", None, enabled=False),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Quit", on_quit),
+        ),
+    )
+    icon.run()
 
 
 def run_without_tray():
-    """Simple fallback: just keep running until Ctrl+C or window close."""
-    print()
-    print("==========================================")
-    print("  Poojan Gems is running!")
-    print(f"  Open: {URL}")
-    print()
-    print("  Company:  Diamond Accounting")
-    print("  Username: admin")
-    print("  Password: Poojan@2025")
-    print()
-    print("  Close this window to stop the app.")
-    print("==========================================")
-    print()
-    try:
+    """Fallback: keep running until server exits."""
+    if IS_FROZEN:
+        # No console available — just wait silently for server to exit
         while server_process and server_process.poll() is None:
             time.sleep(1)
-    except KeyboardInterrupt:
-        pass
+    else:
+        # Running as .py script — print to console
+        print()
+        print("==========================================")
+        print("  Poojan Gems is running!")
+        print(f"  Open: {URL}")
+        print()
+        print("  Company:  Diamond Accounting")
+        print("  Username: admin")
+        print("  Password: Poojan@2025")
+        print()
+        print("  Close this window to stop the app.")
+        print("==========================================")
+        print()
+        try:
+            while server_process and server_process.poll() is None:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
 
 
 def main():
-    print("Poojan Gems - Diamond Accounting")
-    print("Starting up...")
-    print()
-
     # Step 1: Backup
     backup_db("start")
 
     # Step 2: Write env
     write_env()
 
-    # Step 3: Start server
-    print("Starting server...")
-    if not start_server():
-        input("Press Enter to exit...")
+    # Step 3: Kill leftover server if any
+    kill_existing_server()
+    if is_port_busy():
+        show_error(f"Port {PORT} is still in use by another program.\n\nClose that program and try again.")
         return
 
-    print(f"Server running at {URL}")
+    # Step 4: Start server
+    if not start_server():
+        return
 
     # Step 4: Open browser
     webbrowser.open(URL)
@@ -254,10 +313,8 @@ def main():
         run_without_tray()
 
     # Step 6: Cleanup
-    print("Shutting down...")
     stop_server()
     backup_db("exit")
-    print("Done. You can safely remove the pendrive.")
 
 
 if __name__ == "__main__":

@@ -91,6 +91,8 @@ _NEW_PARCEL_COLUMNS = {
     "on_memo_pcs": "INTEGER DEFAULT 0",
     "consignment_weight": "FLOAT DEFAULT 0",
     "consignment_pcs": "INTEGER DEFAULT 0",
+    "purchase_price": "FLOAT DEFAULT 0",
+    "purchase_price_currency": "VARCHAR(3) DEFAULT 'USD'",
 }
 
 _NEW_PURCHASE_COLUMNS = {

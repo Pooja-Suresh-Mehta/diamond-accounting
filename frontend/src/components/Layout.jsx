@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { LayoutDashboard, Search, LogOut, Diamond, Menu, X, BookOpenText, FolderTree, ChevronDown, ChevronRight, Moon, Sun, Boxes, Banknote, BarChart2, Wrench, Users, HardDrive } from 'lucide-react';
+import { LayoutDashboard, Search, LogOut, Diamond, Menu, X, BookOpenText, FolderTree, ChevronDown, ChevronRight, Moon, Sun, Boxes, Banknote, BarChart2, Wrench, Users, HardDrive, ListChecks, Power } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const navItems = [
@@ -65,6 +65,22 @@ export default function Layout() {
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const handleShutdown = async () => {
+    if (!window.confirm('Are you sure? This will close the entire application.')) {
+      return;
+    }
+
+    try {
+      await fetch('/api/shutdown', { method: 'POST' });
+      // App will shut down, show a message and redirect
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 1000);
+    } catch (err) {
+      alert('Failed to shut down application: ' + err.message);
+    }
   };
 
   return (
@@ -250,6 +266,16 @@ export default function Layout() {
             Utilities
           </NavLink>
 
+          {/* Manage Dropdowns */}
+          <NavLink
+            to="/dropdown-options"
+            onClick={() => setSidebarOpen(false)}
+            className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
+          >
+            <ListChecks className="w-5 h-5" />
+            Manage Dropdowns
+          </NavLink>
+
           {/* Backup & Restore */}
           <NavLink
             to="/backup"
@@ -307,6 +333,16 @@ export default function Layout() {
           >
             {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
+          {user?.role === 'admin' && (
+            <button
+              type="button"
+              onClick={handleShutdown}
+              className="p-2 rounded-lg border border-red-300 hover:bg-red-50 text-red-600 hover:text-red-700"
+              title="Shut down the application"
+            >
+              <Power className="w-4 h-4" />
+            </button>
+          )}
           <span className="text-sm text-gray-500">Welcome, {user?.full_name || user?.username}</span>
         </header>
 

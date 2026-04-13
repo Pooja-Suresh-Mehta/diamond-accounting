@@ -1,13 +1,16 @@
 import os
+import sys
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from app.database import engine, Base
 from app.models import models  # noqa: F401
+from app.auth import get_current_user
+from app.models.models import User
 from app.routers import (
     auth, dashboard, diamonds, account_master, parcel_master,
     parcel_purchase, parcel_purchase_return, memo_out, memo_out_return,
@@ -99,6 +102,13 @@ _NEW_PURCHASE_COLUMNS = {
     "vat_pct": "FLOAT DEFAULT 0",
     "vat_amount": "FLOAT DEFAULT 0",
 }
+
+
+async def _delayed_exit():
+    """Exit the application after a short delay to allow response to be sent."""
+    import asyncio
+    await asyncio.sleep(0.5)
+    sys.exit(0)
 
 
 @app.on_event("startup")
