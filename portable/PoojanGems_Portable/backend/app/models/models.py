@@ -309,6 +309,7 @@ class DropdownOption(Base):
     company_id = Column(String(36), ForeignKey("companies.id"), nullable=False, index=True)
     field_name = Column(String(50), nullable=False)   # e.g. "shape", "color", "clarity", "size", "sieve"
     value = Column(String(200), nullable=False)
+    is_suppressed = Column(Boolean, default=False)    # True = suppress this default value from the merged list
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (

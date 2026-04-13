@@ -1,13 +1,16 @@
 import os
+import sys
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from app.database import engine, Base
 from app.models import models  # noqa: F401
+from app.auth import get_current_user
+from app.models.models import User
 from app.routers import (
     auth, dashboard, diamonds, account_master, parcel_master,
     parcel_purchase, parcel_purchase_return, memo_out, memo_out_return,
@@ -101,6 +104,13 @@ _NEW_PURCHASE_COLUMNS = {
 }
 
 
+async def _delayed_exit():
+    """Exit the application after a short delay to allow response to be sent."""
+    import asyncio
+    await asyncio.sleep(0.5)
+    sys.exit(0)
+
+
 @app.on_event("startup")
 async def startup():
     async with engine.begin() as conn:
@@ -169,6 +179,12 @@ async def startup():
             je_names = {c[1] for c in je_cols}
             if "description" not in je_names:
                 await conn.execute(text("ALTER TABLE journal_entries ADD COLUMN description TEXT"))
+
+            # Add is_suppressed column to dropdown_options if missing
+            do_cols = (await conn.execute(text("PRAGMA table_info(dropdown_options)"))).fetchall()
+            do_names = {c[1] for c in do_cols}
+            if "is_suppressed" not in do_names:
+                await conn.execute(text("ALTER TABLE dropdown_options ADD COLUMN is_suppressed BOOLEAN DEFAULT 0"))
 
             # Add new income_expense columns if missing
             _NEW_IE_COLUMNS = {

@@ -89,6 +89,24 @@ FIELD_TABLE_COLUMNS = {
     ],
 }
 
+# Fields whose values contribute to item_name (shape color size clarity joined by spaces)
+ITEM_NAME_FIELDS = {"shape", "color", "clarity", "size"}
+
+# Tables that store item_name built from shape/color/size/clarity.
+# Each entry: (table_name, col_name_for_that_field_in_this_table)
+# col_name is looked up via FIELD_TABLE_COLUMNS at runtime.
+# Tables that have a direct company_id column vs those that need a parent JOIN are
+# handled automatically via ITEMS_PARENT_TABLE below.
+ITEM_NAME_TABLES = [
+    "parcel_masters",
+    "parcel_purchase_items",
+    "parcel_purchase_return_items",
+    "sale_items",
+    "sale_return_items",
+    "consignment_items",
+    "consignment_return_items",
+]
+
 # Items tables need a JOIN to their parent to filter by company_id
 # Maps: items_table -> (parent_table, fk_col_in_items, pk_col_in_parent)
 ITEMS_PARENT_TABLE = {

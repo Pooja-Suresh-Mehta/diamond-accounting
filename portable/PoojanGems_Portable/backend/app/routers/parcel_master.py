@@ -55,23 +55,31 @@ async def get_parcel_options(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # Fetch all custom options for this company in one query
-    custom_rows = (await db.execute(
-        select(DropdownOption.field_name, DropdownOption.value)
+    # Fetch all options for this company, respecting suppressions
+    all_rows = (await db.execute(
+        select(DropdownOption.field_name, DropdownOption.value, DropdownOption.is_suppressed)
         .where(DropdownOption.company_id == current_user.company_id)
         .order_by(DropdownOption.value)
     )).all()
     custom: dict[str, list[str]] = {}
-    for field_name, value in custom_rows:
-        custom.setdefault(field_name, []).append(value)
+    suppressed: dict[str, set[str]] = {}
+    for field_name, value, is_sup in all_rows:
+        if is_sup:
+            suppressed.setdefault(field_name, set()).add(value)
+        else:
+            custom.setdefault(field_name, []).append(value)
+
+    def _active(defaults, field):
+        sup = suppressed.get(field, set())
+        return _merge([v for v in defaults if v not in sup], custom.get(field, []))
 
     return {
-        "shapes": _merge(SHAPES, custom.get("shape", [])),
-        "colors": _merge(COLORS, custom.get("color", [])),
-        "clarities": _merge(CLARITIES, custom.get("clarity", [])),
-        "sizes": _merge(SIZES, custom.get("size", [])),
-        "sieves": _merge(SIEVES, custom.get("sieve", [])),
-        "group_ids": _merge(STOCK_GROUP_IDS, custom.get("stock_group", [])),
+        "shapes": _active(SHAPES, "shape"),
+        "colors": _active(COLORS, "color"),
+        "clarities": _active(CLARITIES, "clarity"),
+        "sizes": _active(SIZES, "size"),
+        "sieves": _active(SIEVES, "sieve"),
+        "group_ids": _active(STOCK_GROUP_IDS, "stock_group"),
         "stock_types": STOCK_TYPES,
         "stock_subtypes": STOCK_SUBTYPES,
         "grown_process_types": GROWN_PROCESS_TYPES,

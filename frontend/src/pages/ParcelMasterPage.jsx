@@ -144,8 +144,8 @@ export default function ParcelMasterPage() {
 
     const D = isINR ? A * B : A * B * C;                          // Purchase/Cost INR Amount
     const E = isUSD ? A * B : (C !== 0 ? (A * B) / C : 0);       // Purchase/Cost USD Amount
-    const J = isINR ? B : (C !== 0 ? B / C : 0);                  // Purchase/Cost INR/Carat
-    const K = isUSD ? B : B * C;                                   // Purchase/Cost USD/Carat
+    const J = isINR ? B : B * C;                                   // Purchase/Cost INR/Carat
+    const K = isUSD ? B : (C !== 0 ? B / C : 0);                  // Purchase/Cost USD/Carat
     const F = isINR ? B * 1.06 : B * 1.06 * C;                   // Asking Price INR/Carats
     const G = isUSD ? B * 1.06 : (C !== 0 ? (B * 1.06) / C : 0); // Asking Price USD/Carats
     const H = D * 1.06;                                            // Asking INR Amount

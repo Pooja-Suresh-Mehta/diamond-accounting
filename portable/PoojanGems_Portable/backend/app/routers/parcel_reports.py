@@ -846,23 +846,31 @@ async def parcel_report_options(
         .order_by(ParcelMaster.lot_no)
     )).scalars().all()
 
-    custom_rows = (await db.execute(
-        select(DropdownOption.field_name, DropdownOption.value)
+    all_opt_rows = (await db.execute(
+        select(DropdownOption.field_name, DropdownOption.value, DropdownOption.is_suppressed)
         .where(DropdownOption.company_id == current_user.company_id)
         .order_by(DropdownOption.value)
     )).all()
     custom: dict[str, list[str]] = {}
-    for field_name, value in custom_rows:
-        custom.setdefault(field_name, []).append(value)
+    suppressed: dict[str, set[str]] = {}
+    for field_name, value, is_sup in all_opt_rows:
+        if is_sup:
+            suppressed.setdefault(field_name, set()).add(value)
+        else:
+            custom.setdefault(field_name, []).append(value)
+
+    def _active(defaults, field):
+        sup = suppressed.get(field, set())
+        return _merge([v for v in defaults if v not in sup], custom.get(field, []))
 
     return {
         "parties": list(parties),
         "brokers": list(brokers),
         "currencies": CURRENCIES,
-        "shapes": _merge(SHAPES, custom.get("shape", [])),
-        "colors": _merge(COLORS, custom.get("color", [])),
-        "clarities": _merge(CLARITIES, custom.get("clarity", [])),
-        "sizes": _merge(SIZES, custom.get("size", [])),
-        "sieves": _merge(SIEVES, custom.get("sieve", [])),
+        "shapes": _active(SHAPES, "shape"),
+        "colors": _active(COLORS, "color"),
+        "clarities": _active(CLARITIES, "clarity"),
+        "sizes": _active(SIZES, "size"),
+        "sieves": _active(SIEVES, "sieve"),
         "lot_nos": list(lot_nos),
     }

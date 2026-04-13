@@ -180,6 +180,12 @@ async def startup():
             if "description" not in je_names:
                 await conn.execute(text("ALTER TABLE journal_entries ADD COLUMN description TEXT"))
 
+            # Add is_suppressed column to dropdown_options if missing
+            do_cols = (await conn.execute(text("PRAGMA table_info(dropdown_options)"))).fetchall()
+            do_names = {c[1] for c in do_cols}
+            if "is_suppressed" not in do_names:
+                await conn.execute(text("ALTER TABLE dropdown_options ADD COLUMN is_suppressed BOOLEAN DEFAULT 0"))
+
             # Add new income_expense columns if missing
             _NEW_IE_COLUMNS = {
                 "main_account": "VARCHAR(200)",
