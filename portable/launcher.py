@@ -43,7 +43,7 @@ server_process = None
 
 
 def backup_db(tag=""):
-    """Copy database to local backup folder."""
+    """Copy database to local backup folder, keeping only the last 5 backups."""
     try:
         if not DB_FILE.exists():
             return
@@ -52,6 +52,10 @@ def backup_db(tag=""):
         suffix = f"_{tag}" if tag else ""
         dest = LOCAL_BACKUP / f"backup_{ts}{suffix}.db"
         shutil.copy2(DB_FILE, dest)
+        # Prune: keep only the 5 most recent backups
+        backups = sorted(LOCAL_BACKUP.glob("backup_*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
+        for old in backups[5:]:
+            old.unlink(missing_ok=True)
     except Exception:
         pass
 
@@ -145,6 +149,9 @@ def start_server():
     env = os.environ.copy()
     env["SECRET_KEY"] = "poojan-gems-portable-secret-2025"
     env["DATABASE_URL"] = f"sqlite+aiosqlite:///{DB_FILE}"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["PYTHONPYCACHEPREFIX"] = str(Path(os.environ.get("TEMP", "/tmp")) / "poojan_pycache")
+    env["PIP_NO_CACHE_DIR"] = "1"
 
     cmd = [
         python, "-m", "uvicorn",
@@ -152,6 +159,7 @@ def start_server():
         "--host", "127.0.0.1",
         "--port", str(PORT),
         "--app-dir", str(BACKEND_DIR),
+        "--log-level", "warning",
     ]
 
     # Hide the console window on Windows
