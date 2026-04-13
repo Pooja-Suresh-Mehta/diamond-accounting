@@ -65,7 +65,15 @@ build/
 .claude/
 .logs/
 
-# Portable build output
-portable/PoojanGems_Portable/
+# Portable build output - zip never tracked, but source files are
 portable/PoojanGems_Portable.zip
+
+# Exclude generated/runtime artifacts inside portable
+portable/PoojanGems_Portable/python/
+portable/PoojanGems_Portable/data/
+portable/PoojanGems_Portable/__pycache__/
+portable/PoojanGems_Portable/backend/__pycache__/
+portable/PoojanGems_Portable/backend/app/**/__pycache__/
+portable/PoojanGems_Portable/backend/.env
+portable/PoojanGems_Portable/backend/static/
 kyc_master_data_extraction/
