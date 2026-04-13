@@ -1,5 +1,4 @@
 import os
-import sys
 from pathlib import Path
 
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
@@ -105,10 +104,10 @@ _NEW_PURCHASE_COLUMNS = {
 
 
 async def _delayed_exit():
-    """Exit the application after a short delay to allow response to be sent."""
-    import asyncio
+    """Send SIGTERM to self after a short delay, letting uvicorn shut down gracefully."""
+    import asyncio, os, signal
     await asyncio.sleep(0.5)
-    sys.exit(0)
+    os.kill(os.getpid(), signal.SIGTERM)
 
 
 @app.post("/api/shutdown")
