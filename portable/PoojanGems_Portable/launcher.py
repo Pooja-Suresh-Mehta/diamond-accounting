@@ -307,7 +307,8 @@ def acquire_lock():
                     capture_output=True, text=True
                 )
                 if str(old_pid) in result.stdout:
-                    show_info("Poojan Gems is already running.\nCheck the system tray.")
+                    webbrowser.open(URL)
+                    show_info("Poojan Gems is already running.\nOpening the app in your browser...")
                     return False
         except Exception:
             pass  # Stale lock — proceed
