@@ -16,7 +16,6 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
     connect_args=connect_args,
-    pool_size=1 if settings.DATABASE_URL.startswith("sqlite") else 5,  # SQLite: single writer
 )
 
 # Enable WAL mode for SQLite so reads don't block writes and vice versa
