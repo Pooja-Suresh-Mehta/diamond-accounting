@@ -256,6 +256,14 @@ def run_with_tray():
             pystray.MenuItem("Quit", on_quit),
         ),
     )
+
+    # Background thread: stop the tray icon when the server exits (e.g. UI shutdown button)
+    def _watch_server():
+        while server_process and server_process.poll() is None:
+            time.sleep(1)
+        icon.stop()
+
+    threading.Thread(target=_watch_server, daemon=True).start()
     icon.run()
 
 
@@ -286,8 +294,41 @@ def run_without_tray():
             pass
 
 
+def acquire_lock():
+    """Ensure only one launcher instance runs at a time using a PID lock file."""
+    lock_file = APP_DIR / "poojan_gems.lock"
+    if lock_file.exists():
+        try:
+            old_pid = int(lock_file.read_text().strip())
+            if sys.platform == "win32":
+                # Check if that PID is still alive
+                result = subprocess.run(
+                    ["tasklist", "/FI", f"PID eq {old_pid}", "/NH"],
+                    capture_output=True, text=True
+                )
+                if str(old_pid) in result.stdout:
+                    show_info("Poojan Gems is already running.\nCheck the system tray.")
+                    return False
+        except Exception:
+            pass  # Stale lock — proceed
+    lock_file.write_text(str(os.getpid()))
+    return True
+
+
+def release_lock():
+    lock_file = APP_DIR / "poojan_gems.lock"
+    try:
+        lock_file.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
 def main():
-    # Step 1: Backup
+    # Step 1: Single-instance check
+    if not acquire_lock():
+        return
+
+    # Step 2: Backup
     backup_db("start")
 
     # Step 2: Write env
@@ -315,6 +356,7 @@ def main():
     # Step 6: Cleanup
     stop_server()
     backup_db("exit")
+    release_lock()
 
 
 if __name__ == "__main__":
