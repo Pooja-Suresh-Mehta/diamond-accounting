@@ -1,11 +1,10 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { LayoutDashboard, Search, LogOut, Diamond, Menu, X, BookOpenText, FolderTree, ChevronDown, ChevronRight, Moon, Sun, Boxes, Banknote, BarChart2, Wrench, Users, HardDrive, ListChecks, Power } from 'lucide-react';
+import { LayoutDashboard, LogOut, Diamond, Menu, X, BookOpenText, FolderTree, ChevronDown, ChevronRight, Moon, Sun, Boxes, Banknote, BarChart2, Wrench, Users, HardDrive, ListChecks, Power } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/stock-search', icon: Search, label: 'Stock Search' },
 ];
 
 const PARCEL_REPORT_TABS = [
