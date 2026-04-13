@@ -243,15 +243,13 @@ export default function ParcelMasterPage() {
                   <th className="text-right px-3 py-2">Weight</th>
                   <th className="text-right px-3 py-2">
                     <div className="flex items-center justify-end gap-1">
-                      <span>Asking</span>
+                      <span>P/Ct</span>
                       <button
                         onClick={() => setAskingCurrency(c => c === 'INR' ? 'USD' : 'INR')}
                         className="px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
                       >{askingCurrency}</button>
                     </div>
                   </th>
-                  <th className="text-left px-3 py-2">Created At</th>
-                  <th className="text-left px-3 py-2">Created By</th>
                 </tr>
               </thead>
               <tbody>
@@ -269,11 +267,9 @@ export default function ParcelMasterPage() {
                     <td className="px-3 py-2">{r.stock_group_id}</td>
                     <td className="px-3 py-2 text-right">{Number(r.opening_weight_carats || 0).toFixed(2)}</td>
                     <td className="px-3 py-2 text-right">{Number(askingCurrency === 'INR' ? r.asking_inr_amount : r.asking_usd_amount || 0).toFixed(2)}</td>
-                    <td className="px-3 py-2">{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
-                    <td className="px-3 py-2">{r.created_by_name || ''}</td>
                   </tr>
                 ))}
-                {tableRows.length === 0 && <tr><td colSpan={14} className="text-center px-3 py-5 text-gray-500">No records found</td></tr>}
+                {tableRows.length === 0 && <tr><td colSpan={12} className="text-center px-3 py-5 text-gray-500">No records found</td></tr>}
               </tbody>
             </table>
           </div>
