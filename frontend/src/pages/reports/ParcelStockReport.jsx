@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Search, RotateCcw, Download, ChevronLeft } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { Search, RotateCcw, Download, ChevronLeft, Columns } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../api';
 import toast from 'react-hot-toast';
@@ -158,6 +158,9 @@ export default function ParcelStockReport() {
   const [colFilters, setColFilters] = useState({});
   const [showMorePopup, setShowMorePopup] = useState(false);
   const [moreTab, setMoreTab] = useState('location');
+  const [hiddenCols, setHiddenCols] = useState(new Set());
+  const [showColChooser, setShowColChooser] = useState(false);
+  const colChooserRef = useRef(null);
   const [locationForm, setLocationForm] = useState({ city: '', state: '', country: '' });
   const [boxGroupForm, setBoxGroupForm] = useState({ box_name: '', group_name: '' });
   const [moreLoading, setMoreLoading] = useState(false);
@@ -231,6 +234,8 @@ export default function ParcelStockReport() {
     );
   }, [data, colFilters]);
 
+  const visibleCols = useMemo(() => COLS.filter(c => !hiddenCols.has(c.key)), [hiddenCols]);
+
   // ── Selection helpers ────────────────────────────────────
   const allChecked = filteredRows.length > 0 && filteredRows.every(r => selected.has(r.id));
   const toggleAll = () => {
@@ -254,10 +259,10 @@ export default function ParcelStockReport() {
 
   // ── Export ───────────────────────────────────────────────
   const exportExcel = () => {
-    const headers = COLS.map(c => c.label);
+    const headers = visibleCols.map(c => c.label);
     const csvRows = [headers.join(',')];
     filteredRows.forEach(r => {
-      csvRows.push(COLS.map(c => {
+      csvRows.push(visibleCols.map(c => {
         const v = r[c.key] ?? '';
         return typeof v === 'string' && v.includes(',') ? `"${v}"` : v;
       }).join(','));
@@ -320,10 +325,41 @@ export default function ParcelStockReport() {
             </button>
             <h2 className="text-lg font-semibold text-gray-800">Parcel Stock Search — {filteredRows.length} records</h2>
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-2 flex-wrap items-center">
+            <div className="relative" ref={colChooserRef}>
+              <button onClick={() => setShowColChooser(v => !v)}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 rounded-lg">
+                <Columns className="w-4 h-4" /> Columns {hiddenCols.size > 0 && <span className="ml-1 px-1.5 py-0.5 text-xs bg-orange-500 text-white rounded-full">{hiddenCols.size}</span>}
+              </button>
+              {showColChooser && (
+                <div className="absolute right-0 top-10 z-50 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56 max-h-96 overflow-y-auto">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-gray-600 uppercase">Show/Hide Columns</span>
+                    {hiddenCols.size > 0 && (
+                      <button onClick={() => setHiddenCols(new Set())} className="text-xs text-blue-600 hover:underline">Reset</button>
+                    )}
+                  </div>
+                  {COLS.map(col => (
+                    <label key={col.key} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1">
+                      <input
+                        type="checkbox"
+                        checked={!hiddenCols.has(col.key)}
+                        onChange={() => setHiddenCols(prev => {
+                          const s = new Set(prev);
+                          s.has(col.key) ? s.delete(col.key) : s.add(col.key);
+                          return s;
+                        })}
+                        className="w-3.5 h-3.5"
+                      />
+                      <span className="text-sm text-gray-700">{col.label}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
             <button onClick={exportExcel}
               className="flex items-center gap-1.5 px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 rounded-lg">
-              <Download className="w-4 h-4" /> Export Excel
+              <Download className="w-4 h-4" /> Export CSV
             </button>
             <button onClick={() => setShowMorePopup(true)}
               className="px-3 py-2 text-sm bg-gray-700 text-white hover:bg-gray-800 rounded-lg">
@@ -359,7 +395,7 @@ export default function ParcelStockReport() {
                 <th className="px-3 py-2 w-8">
                   <input type="checkbox" checked={allChecked} onChange={toggleAll} className="w-4 h-4" />
                 </th>
-                {COLS.map(col => (
+                {visibleCols.map(col => (
                   <th key={col.key} className="px-3 py-2 text-left font-medium text-gray-600 whitespace-nowrap">
                     {col.label}
                   </th>
@@ -368,7 +404,7 @@ export default function ParcelStockReport() {
               {/* Column filter row */}
               <tr className="bg-gray-50 border-b">
                 <td />
-                {COLS.map(col => (
+                {visibleCols.map(col => (
                   <td key={col.key} className="px-2 py-1">
                     <input
                       type="text"
@@ -387,27 +423,24 @@ export default function ParcelStockReport() {
                   <td className="px-3 py-2">
                     <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleRow(r.id)} className="w-4 h-4" />
                   </td>
-                  <td className="px-3 py-2">
-                    <span className={`px-1.5 py-0.5 text-xs rounded font-medium ${
-                      r.cur_status === 'Available' ? 'bg-green-100 text-green-800' :
-                      r.cur_status === 'Memo' ? 'bg-yellow-100 text-yellow-800' :
-                      r.cur_status === 'Sold' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-700'}`}>
-                      {r.cur_status || '—'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 font-medium">{r.lot_no}</td>
-                  <td className="px-3 py-2">{r.item_name}</td>
-                  <td className="px-3 py-2">{r.shape}</td>
-                  <td className="px-3 py-2 text-right">{(r.carats || 0).toFixed(3)}</td>
-                  <td className="px-3 py-2 text-right">{(r.on_hand_weight || 0).toFixed(3)}</td>
-                  <td className="px-3 py-2 text-right">{(r.on_memo_weight || 0).toFixed(3)}</td>
-                  <td className="px-3 py-2">{r.size}</td>
-                  <td className="px-3 py-2">{r.color}</td>
-                  <td className="px-3 py-2">{r.clarity}</td>
-                  <td className="px-3 py-2 text-right">{(r.asking_price_usd_carats || 0).toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right">{(r.asking_usd_amount || 0).toFixed(2)}</td>
-                  <td className="px-3 py-2">{r.stock_group_id || ''}</td>
+                  {visibleCols.map(col => {
+                    if (col.key === 'cur_status') return (
+                      <td key={col.key} className="px-3 py-2">
+                        <span className={`px-1.5 py-0.5 text-xs rounded font-medium ${
+                          r.cur_status === 'Available' ? 'bg-green-100 text-green-800' :
+                          r.cur_status === 'Memo' ? 'bg-yellow-100 text-yellow-800' :
+                          r.cur_status === 'Sold' ? 'bg-red-100 text-red-800' :
+                          'bg-gray-100 text-gray-700'}`}>
+                          {r.cur_status || '—'}
+                        </span>
+                      </td>
+                    );
+                    return (
+                      <td key={col.key} className={`px-3 py-2 ${col.num ? 'text-right' : ''}`}>
+                        {col.num ? (Number(r[col.key] || 0).toFixed(col.key.includes('weight') || col.key === 'carats' || col.key === 'opening_weight_carats' ? 3 : 2)) : (r[col.key] ?? '')}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
               {filteredRows.length === 0 && (
@@ -417,14 +450,20 @@ export default function ParcelStockReport() {
             {filteredRows.length > 0 && (
               <tfoot className="bg-gray-100 border-t font-semibold text-sm">
                 <tr>
-                  <td colSpan={5} className="px-3 py-2 text-right text-gray-600">Totals:</td>
-                  <td className="px-3 py-2 text-right">{totalCarats.toFixed(3)}</td>
-                  <td className="px-3 py-2 text-right">{totalOnHand.toFixed(3)}</td>
-                  <td className="px-3 py-2 text-right">{totalMemo.toFixed(3)}</td>
-                  <td colSpan={2} />
-                  <td className="px-3 py-2 text-right">{avgRate.toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right">{totalAmount.toFixed(2)}</td>
-                  <td />
+                  <td className="px-3 py-2 text-right text-gray-600">Totals</td>
+                  {visibleCols.map(col => {
+                    const totalsMap = {
+                      carats: totalCarats.toFixed(3),
+                      on_hand_weight: totalOnHand.toFixed(3),
+                      on_memo_weight: totalMemo.toFixed(3),
+                      asking_usd_amount: totalAmount.toFixed(2),
+                    };
+                    return (
+                      <td key={col.key} className={`px-3 py-2 ${col.num ? 'text-right' : ''}`}>
+                        {totalsMap[col.key] ?? ''}
+                      </td>
+                    );
+                  })}
                 </tr>
               </tfoot>
             )}
