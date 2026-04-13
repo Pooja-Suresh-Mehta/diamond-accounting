@@ -255,7 +255,14 @@ export default function ParcelStockReport() {
   const totalOnHand = filteredRows.reduce((s, r) => s + (r.on_hand_weight || 0), 0);
   const totalMemo = filteredRows.reduce((s, r) => s + (r.on_memo_weight || 0), 0);
   const totalAmount = filteredRows.reduce((s, r) => s + (r.asking_usd_amount || 0), 0);
+  const totalAskINR = filteredRows.reduce((s, r) => s + (r.asking_inr_amount || 0), 0);
+  const totalCostUSD = filteredRows.reduce((s, r) => s + (r.purchase_cost_usd_amount || 0), 0);
+  const totalCostINR = filteredRows.reduce((s, r) => s + (r.purchase_cost_inr_amount || 0), 0);
   const avgRate = totalCarats > 0 ? totalAmount / totalCarats : 0;
+  const avgCostUSDCt = totalCarats > 0 ? totalCostUSD / totalCarats : 0;
+  const avgCostINRCt = totalCarats > 0 ? totalCostINR / totalCarats : 0;
+  const avgAskUSDCt = totalCarats > 0 ? totalAmount / totalCarats : 0;
+  const avgAskINRCt = totalCarats > 0 ? totalAskINR / totalCarats : 0;
 
   // ── Export ───────────────────────────────────────────────
   const exportExcel = () => {
@@ -335,9 +342,10 @@ export default function ParcelStockReport() {
                 <div className="absolute right-0 top-10 z-50 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56 max-h-96 overflow-y-auto">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xs font-semibold text-gray-600 uppercase">Show/Hide Columns</span>
-                    {hiddenCols.size > 0 && (
-                      <button onClick={() => setHiddenCols(new Set())} className="text-xs text-blue-600 hover:underline">Reset</button>
-                    )}
+                    <div className="flex gap-2">
+                      <button onClick={() => setHiddenCols(new Set())} className="text-xs text-blue-600 hover:underline">All</button>
+                      <button onClick={() => setHiddenCols(new Set(COLS.map(c => c.key)))} className="text-xs text-red-500 hover:underline">None</button>
+                    </div>
                   </div>
                   {COLS.map(col => (
                     <label key={col.key} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1">
@@ -450,17 +458,36 @@ export default function ParcelStockReport() {
             {filteredRows.length > 0 && (
               <tfoot className="bg-gray-100 border-t font-semibold text-sm">
                 <tr>
-                  <td className="px-3 py-2 text-right text-gray-600">Totals</td>
+                  <td className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">Totals</td>
                   {visibleCols.map(col => {
                     const totalsMap = {
                       carats: totalCarats.toFixed(3),
                       on_hand_weight: totalOnHand.toFixed(3),
                       on_memo_weight: totalMemo.toFixed(3),
                       asking_usd_amount: totalAmount.toFixed(2),
+                      asking_inr_amount: totalAskINR.toFixed(2),
+                      purchase_cost_usd_amount: totalCostUSD.toFixed(2),
+                      purchase_cost_inr_amount: totalCostINR.toFixed(2),
                     };
                     return (
                       <td key={col.key} className={`px-3 py-2 ${col.num ? 'text-right' : ''}`}>
                         {totalsMap[col.key] ?? ''}
+                      </td>
+                    );
+                  })}
+                </tr>
+                <tr className="border-t border-gray-300">
+                  <td className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">Avg/Ct</td>
+                  {visibleCols.map(col => {
+                    const avgMap = {
+                      purchase_cost_usd_carat: avgCostUSDCt.toFixed(2),
+                      purchase_cost_inr_carat: avgCostINRCt.toFixed(2),
+                      asking_price_usd_carats: avgAskUSDCt.toFixed(2),
+                      asking_price_inr_carats: avgAskINRCt.toFixed(2),
+                    };
+                    return (
+                      <td key={col.key} className={`px-3 py-2 ${col.num ? 'text-right' : ''}`}>
+                        {avgMap[col.key] ?? ''}
                       </td>
                     );
                   })}
