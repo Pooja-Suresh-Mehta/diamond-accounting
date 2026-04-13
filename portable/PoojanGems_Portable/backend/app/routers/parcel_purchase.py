@@ -44,7 +44,7 @@ async def _upsert_parcel_items(
     inr_rate: float = 85,
 ):
     def _apply_first_purchase_costs(row: ParcelMaster, item):
-        if float(row.purchase_cost_price_usd_carats or 0) > 0:
+        if float(row.purchase_cost_usd_carat or 0) > 0:
             return
         issue_carats = float(item.issue_carats or 0)
         rate_usd_per_carat = float(item.rate or 0)
@@ -58,9 +58,9 @@ async def _upsert_parcel_items(
         asking_price_inr_carats = asking_price_usd_carats * selected_inr_rate
 
         row.usd_to_inr_rate = selected_inr_rate
-        row.purchase_cost_price_usd_carats = rate_usd_per_carat
+        row.purchase_cost_usd_carat = rate_usd_per_carat
         row.purchase_cost_usd_amount = purchase_cost_usd_amount
-        row.purchase_cost_price_inr_carats = selected_inr_rate
+        row.purchase_cost_inr_carat = selected_inr_rate
         row.purchase_cost_inr_amount = purchase_cost_inr_amount
         row.asking_price_usd_carats = asking_price_usd_carats
         row.asking_usd_amount = asking_usd_amount

@@ -55,7 +55,7 @@ async def get_options(
             "color": r.color, "clarity": r.clarity, "size": r.size, "sieve_mm": r.sieve_mm,
             "opening_weight_carats": r.opening_weight_carats,
             "purchase_cost_usd_amount": r.purchase_cost_usd_amount,
-            "purchase_cost_price_usd_carats": r.purchase_cost_price_usd_carats,
+            "purchase_cost_price_usd_carats": r.purchase_cost_usd_carat,
         } for r in parcel_rows if r.lot_no],
         "payment_statuses": PAYMENT_STATUSES,
         "next_invoice_number": await next_number(db, Sale, Sale.invoice_number, current_user.company_id),
