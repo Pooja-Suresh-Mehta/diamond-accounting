@@ -74,13 +74,14 @@ export default function Layout() {
 
     try {
       await fetch('/api/shutdown', { method: 'POST' });
-      // App will shut down, show a message and redirect
-      setTimeout(() => {
-        window.location.href = '/';
-      }, 1000);
-    } catch (err) {
-      alert('Failed to shut down application: ' + err.message);
+    } catch {
+      // fetch will throw when the server closes the connection — that's expected
     }
+    document.body.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;background:#f9fafb;color:#374151;">
+        <h1 style="font-size:1.5rem;font-weight:700;margin-bottom:0.5rem;">Application closed</h1>
+        <p style="color:#6b7280;">You can close this browser tab.</p>
+      </div>`;
   };
 
   return (

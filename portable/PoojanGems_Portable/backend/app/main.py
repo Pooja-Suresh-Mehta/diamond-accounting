@@ -2,7 +2,7 @@ import os
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -109,6 +109,12 @@ async def _delayed_exit():
     import asyncio
     await asyncio.sleep(0.5)
     sys.exit(0)
+
+
+@app.post("/api/shutdown")
+async def shutdown(background_tasks: BackgroundTasks):
+    background_tasks.add_task(_delayed_exit)
+    return {"ok": True}
 
 
 @app.on_event("startup")
