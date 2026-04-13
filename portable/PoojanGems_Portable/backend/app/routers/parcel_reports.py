@@ -158,7 +158,7 @@ async def parcel_stock_report(
             "cur_status": cur_status,
             "asking_price_usd_carats": round(float(r.asking_price_usd_carats or 0), 2),
             "asking_usd_amount": round(float(r.asking_usd_amount or 0), 2),
-            "purchase_cost_price_usd_carats": round(float(r.purchase_cost_price_usd_carats or 0), 2),
+            "purchase_cost_price_usd_carats": round(float(r.purchase_cost_usd_carat or 0), 2),
         })
     return {
         "results": result,
