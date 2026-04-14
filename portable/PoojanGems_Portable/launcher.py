@@ -26,15 +26,22 @@ else:
     APP_DIR = Path(__file__).parent
 
 BACKEND_DIR = APP_DIR / "backend"
-DATA_DIR = APP_DIR / "data"
-DB_FILE = DATA_DIR / "diamond_accounting.db"
+PORTABLE_DATA_DIR = APP_DIR / "data"
 ENV_FILE = BACKEND_DIR / ".env"
 
-# Local backup folder
+# Store the DB on the laptop's local disk for reliable I/O.
+# The pendrive copy is treated as a portable snapshot that gets
+# synced on startup (pendrive → laptop) and shutdown (laptop → pendrive).
 if sys.platform == "win32":
+    LOCAL_DATA_DIR = Path("C:/PoojanGems_Data")
     LOCAL_BACKUP = Path("C:/PoojanGems_Backup")
 else:
+    LOCAL_DATA_DIR = Path.home() / "PoojanGems_Data"
     LOCAL_BACKUP = Path.home() / "PoojanGems_Backup"
+
+DB_NAME = "diamond_accounting.db"
+DB_FILE = LOCAL_DATA_DIR / DB_NAME
+PORTABLE_DB_FILE = PORTABLE_DATA_DIR / DB_NAME
 
 PORT = 8000
 URL = f"http://localhost:{PORT}"
@@ -43,7 +50,7 @@ server_process = None
 
 
 def backup_db(tag=""):
-    """Copy database to local backup folder."""
+    """Copy database to local backup folder, keeping only the last 5 backups."""
     try:
         if not DB_FILE.exists():
             return
@@ -52,13 +59,37 @@ def backup_db(tag=""):
         suffix = f"_{tag}" if tag else ""
         dest = LOCAL_BACKUP / f"backup_{ts}{suffix}.db"
         shutil.copy2(DB_FILE, dest)
+        # Prune: keep only the 5 most recent backups
+        backups = sorted(LOCAL_BACKUP.glob("backup_*.db"), key=lambda p: p.stat().st_mtime, reverse=True)
+        for old in backups[5:]:
+            old.unlink(missing_ok=True)
     except Exception:
         pass
 
 
+def sync_db_to_local():
+    """On startup: copy pendrive DB → laptop if laptop copy is missing or older."""
+    LOCAL_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    PORTABLE_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if not PORTABLE_DB_FILE.exists():
+        return  # first run — DB will be created on laptop
+    if not DB_FILE.exists() or PORTABLE_DB_FILE.stat().st_mtime > DB_FILE.stat().st_mtime:
+        shutil.copy2(PORTABLE_DB_FILE, DB_FILE)
+
+
+def sync_db_to_pendrive():
+    """On shutdown: copy laptop DB → pendrive so data travels with the drive."""
+    try:
+        PORTABLE_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        if DB_FILE.exists():
+            shutil.copy2(DB_FILE, PORTABLE_DB_FILE)
+    except Exception:
+        pass  # pendrive may already be disconnected
+
+
 def write_env():
-    """Write .env file for the backend."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    """Write .env file for the backend, pointing to the local-disk DB."""
+    LOCAL_DATA_DIR.mkdir(parents=True, exist_ok=True)
     with open(ENV_FILE, "w") as f:
         f.write(f"SECRET_KEY=poojan-gems-portable-secret-2025\n")
         f.write(f"DATABASE_URL=sqlite+aiosqlite:///{DB_FILE}\n")
@@ -145,6 +176,9 @@ def start_server():
     env = os.environ.copy()
     env["SECRET_KEY"] = "poojan-gems-portable-secret-2025"
     env["DATABASE_URL"] = f"sqlite+aiosqlite:///{DB_FILE}"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["PYTHONPYCACHEPREFIX"] = str(Path(os.environ.get("TEMP", "/tmp")) / "poojan_pycache")
+    env["PIP_NO_CACHE_DIR"] = "1"
 
     cmd = [
         python, "-m", "uvicorn",
@@ -152,6 +186,7 @@ def start_server():
         "--host", "127.0.0.1",
         "--port", str(PORT),
         "--app-dir", str(BACKEND_DIR),
+        "--log-level", "warning",
     ]
 
     # Hide the console window on Windows
@@ -256,14 +291,6 @@ def run_with_tray():
             pystray.MenuItem("Quit", on_quit),
         ),
     )
-
-    # Background thread: stop the tray icon when the server exits (e.g. UI shutdown button)
-    def _watch_server():
-        while server_process and server_process.poll() is None:
-            time.sleep(1)
-        icon.stop()
-
-    threading.Thread(target=_watch_server, daemon=True).start()
     icon.run()
 
 
@@ -294,45 +321,12 @@ def run_without_tray():
             pass
 
 
-def acquire_lock():
-    """Ensure only one launcher instance runs at a time using a PID lock file."""
-    lock_file = APP_DIR / "poojan_gems.lock"
-    if lock_file.exists():
-        try:
-            old_pid = int(lock_file.read_text().strip())
-            if sys.platform == "win32":
-                # Check if that PID is still alive
-                result = subprocess.run(
-                    ["tasklist", "/FI", f"PID eq {old_pid}", "/NH"],
-                    capture_output=True, text=True
-                )
-                if str(old_pid) in result.stdout:
-                    webbrowser.open(URL)
-                    show_info("Poojan Gems is already running.\nOpening the app in your browser...")
-                    return False
-        except Exception:
-            pass  # Stale lock — proceed
-    lock_file.write_text(str(os.getpid()))
-    return True
-
-
-def release_lock():
-    lock_file = APP_DIR / "poojan_gems.lock"
-    try:
-        lock_file.unlink(missing_ok=True)
-    except Exception:
-        pass
-
-
 def main():
-    # Step 1: Single-instance check
-    if not acquire_lock():
-        return
-
-    # Step 2: Backup
+    # Step 1: Sync DB from pendrive → laptop, then backup
+    sync_db_to_local()
     backup_db("start")
 
-    # Step 2: Write env
+    # Step 2: Write env (points to local-disk DB)
     write_env()
 
     # Step 3: Kill leftover server if any
@@ -354,10 +348,10 @@ def main():
     except Exception:
         run_without_tray()
 
-    # Step 6: Cleanup
+    # Step 6: Cleanup — sync DB back to pendrive for portability
     stop_server()
     backup_db("exit")
-    release_lock()
+    sync_db_to_pendrive()
 
 
 if __name__ == "__main__":
