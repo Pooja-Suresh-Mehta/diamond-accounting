@@ -12,6 +12,21 @@ router = APIRouter(prefix="/api/dropdown-options", tags=["dropdown-options"])
 
 ALLOWED_FIELDS = {"shape", "color", "clarity", "size", "sieve", "stock_group"}
 
+_HARDCODED_SHAPE_MAP: dict[str, str] = {
+    "baguette": "TPBG",
+    "tapper": "TPBG",
+    "pear": "PMQ",
+    "marquise": "PMQ",
+    "round": "Round",
+    "cushion": "OFS",
+    "emerald": "OFS",
+    "heart": "OFS",
+    "oval": "OFS",
+    "princess": "OFS",
+    "radiant": "OFS",
+    "triangle": "OFS",
+}
+
 
 def _merge(defaults: list[str], custom: list[str]) -> list[str]:
     """Merge default + custom values, deduplicate case-insensitively, preserve order."""
@@ -50,6 +65,61 @@ async def get_all_options(
         active_defaults = [v for v in FIELD_DEFAULTS.get(field, []) if v not in field_suppressed]
         result[field] = _merge(active_defaults, custom.get(field, []))
     return result
+
+
+@router.get("/shape-map")
+async def get_shape_map(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return shape→stockgroup mapping (hardcoded defaults merged with company custom)."""
+    rows = (await db.execute(
+        select(DropdownOption.value)
+        .where(
+            DropdownOption.company_id == current_user.company_id,
+            DropdownOption.field_name == "shape_map",
+        )
+    )).scalars().all()
+    result: dict[str, str] = dict(_HARDCODED_SHAPE_MAP)
+    for row in rows:
+        parts = row.split("::", 1)
+        if len(parts) == 2:
+            result[parts[0].strip().lower()] = parts[1].strip()
+    return result
+
+
+@router.post("/shape-map")
+async def add_shape_map(
+    body: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Add or update a shape→stockgroup mapping."""
+    shape = (body.get("shape") or "").strip()
+    stock_group = (body.get("stock_group") or "").strip()
+    if not shape or not stock_group:
+        raise HTTPException(status_code=400, detail="shape and stock_group are required")
+    new_value = f"{shape}::{stock_group}"
+    existing_rows = (await db.execute(
+        select(DropdownOption).where(
+            DropdownOption.company_id == current_user.company_id,
+            DropdownOption.field_name == "shape_map",
+        )
+    )).scalars().all()
+    existing = next(
+        (r for r in existing_rows if r.value.split("::", 1)[0].strip().lower() == shape.lower()),
+        None,
+    )
+    if existing:
+        existing.value = new_value
+    else:
+        db.add(DropdownOption(
+            company_id=current_user.company_id,
+            field_name="shape_map",
+            value=new_value,
+        ))
+    await db.commit()
+    return {"ok": True, "shape": shape, "stock_group": stock_group}
 
 
 @router.get("/{field_name}")
@@ -281,6 +351,19 @@ async def rename_option(
             ))
             if new_row.is_suppressed:
                 new_row.is_suppressed = False
+
+    # Cascade: if a shape was renamed, update shape_map entries too
+    if body.field_name == "shape":
+        shape_map_rows = (await db.execute(
+            select(DropdownOption).where(
+                DropdownOption.company_id == current_user.company_id,
+                DropdownOption.field_name == "shape_map",
+            )
+        )).scalars().all()
+        for sm in shape_map_rows:
+            parts = sm.value.split("::", 1)
+            if len(parts) == 2 and parts[0].strip().lower() == old_val.lower():
+                sm.value = f"{new_val}::{parts[1].strip()}"
 
     await db.commit()
     return {"ok": True, "updated_tables": updated_tables}

@@ -6,6 +6,7 @@ import api from '../api';
 import ListPageControls from '../components/ListPageControls';
 import CreatableField from '../components/CreatableField';
 import MergeDialog from '../components/MergeDialog';
+import { fmtAmt } from '../utils/format';
 
 const INIT = {
   lot_no: '',
@@ -42,6 +43,24 @@ const numericFields = new Set([
   'asking_price_inr_carats', 'asking_inr_amount',
 ]);
 
+// Hardcoded shape → stock group mapping (fallback before API loads)
+const SHAPE_STOCKGROUP_DEFAULTS = {
+  'baguette': 'TPBG', 'tapper': 'TPBG',
+  'pear': 'PMQ', 'marquise': 'PMQ',
+  'round': 'Round',
+  'cushion': 'OFS', 'emerald': 'OFS', 'heart': 'OFS',
+  'oval': 'OFS', 'princess': 'OFS', 'radiant': 'OFS', 'triangle': 'OFS',
+};
+
+// Hardcoded size → sieve mapping (fixed, not editable)
+const SIZE_SIEVE_MAP = {
+  '0.18 UP': '1/5',
+  '0.23 UP': '1/4',
+  '0.30 UP': '1/3',
+  '0.40 UP': '3/8',
+  '0.50 UP': '1/2',
+};
+
 function Field({ name, label, value, onChange, options = [], rows = 1, readOnly = false }) {
   const cls = `w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none ${readOnly ? 'bg-gray-100 text-gray-700' : ''}`;
   if (options.length) {
@@ -64,6 +83,15 @@ function Field({ name, label, value, onChange, options = [], rows = 1, readOnly 
     );
   }
   const isNum = numericFields.has(name);
+  // Readonly numeric fields: show comma-formatted value as text
+  if (isNum && readOnly) {
+    return (
+      <div className="space-y-1">
+        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
+        <input type="text" value={fmtAmt(value)} readOnly className={cls} />
+      </div>
+    );
+  }
   const type = isNum ? 'number' : 'text';
   const handleFocus = isNum && !readOnly ? (e) => { if (Number(e.target.value) === 0) onChange(name, ''); } : undefined;
   const handleBlur = isNum && !readOnly ? (e) => { if (e.target.value === '') onChange(name, 0); } : undefined;
@@ -91,6 +119,9 @@ export default function ParcelMasterPage() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(INIT);
   const [mergeState, setMergeState] = useState(null); // { existing, mergedPreview, payload }
+  const [shapeMap, setShapeMap] = useState(SHAPE_STOCKGROUP_DEFAULTS); // shape(lowercase) → stockgroup
+  const [shapeMappingModal, setShapeMappingModal] = useState(null); // { shape: string } | null
+  const [shapeMappingValue, setShapeMappingValue] = useState('');
   const [opts, setOpts] = useState({
     shapes: [], colors: [], clarities: [], sizes: [], sieves: [], group_ids: [],
     stock_types: ['Natural Diamond', 'Gem Stone'], stock_subtypes: ['Polished', 'Makeable'], grown_process_types: ['Natural'],
@@ -105,11 +136,22 @@ export default function ParcelMasterPage() {
     const res = await api.get('/parcel-master/options');
     setOpts(res.data);
   };
+  const loadShapeMap = async () => {
+    try {
+      const res = await api.get('/dropdown-options/shape-map');
+      setShapeMap(res.data);
+    } catch {}
+  };
 
   const handleNewOption = (fieldKey, newVal) => {
     const keyMap = { shape: 'shapes', color: 'colors', clarity: 'clarities', size: 'sizes', sieve: 'sieves', stock_group: 'group_ids' };
     const optsKey = keyMap[fieldKey];
     if (optsKey) setOpts((prev) => ({ ...prev, [optsKey]: [...(prev[optsKey] || []), newVal] }));
+    // For new shapes, prompt user for stock group mapping if not already known
+    if (fieldKey === 'shape' && !shapeMap[newVal.toLowerCase()]) {
+      setShapeMappingModal({ shape: newVal });
+      setShapeMappingValue('');
+    }
   };
   const loadEdit = async () => {
     if (!id) return;
@@ -117,7 +159,10 @@ export default function ParcelMasterPage() {
     setForm({ ...INIT, ...res.data });
   };
 
-  useEffect(() => { loadOpts().catch(() => toast.error('Failed to load parcel options')); }, []);
+  useEffect(() => {
+    loadOpts().catch(() => toast.error('Failed to load parcel options'));
+    loadShapeMap();
+  }, []);
   useEffect(() => {
     if (!isFormMode) loadRows().catch(() => toast.error('Failed to load parcel list'));
   }, [search, isFormMode]);
@@ -170,6 +215,16 @@ export default function ParcelMasterPage() {
   const setValue = (name, value) => {
     if (numericFields.has(name)) {
       setForm((p) => ({ ...p, [name]: value === '' ? '' : Number(value) }));
+      return;
+    }
+    if (name === 'shape') {
+      const mapped = shapeMap[value?.toLowerCase()];
+      setForm((p) => ({ ...p, shape: value, ...(mapped ? { stock_group_id: mapped } : {}) }));
+      return;
+    }
+    if (name === 'size') {
+      const sieve = SIZE_SIEVE_MAP[value];
+      setForm((p) => ({ ...p, size: value, ...(sieve !== undefined ? { sieve_mm: sieve } : {}) }));
       return;
     }
     setForm((p) => ({ ...p, [name]: value }));
@@ -227,6 +282,28 @@ export default function ParcelMasterPage() {
     setMergeState(null);
     toast('New entry discarded', { icon: '🗑️' });
     navigate('/parcel-master', { replace: true });
+  };
+
+  const handleSaveShapeMapping = async () => {
+    if (!shapeMappingModal || !shapeMappingValue.trim()) {
+      setShapeMappingModal(null);
+      return;
+    }
+    try {
+      await api.post('/dropdown-options/shape-map', {
+        shape: shapeMappingModal.shape,
+        stock_group: shapeMappingValue.trim(),
+      });
+      const updated = { ...shapeMap, [shapeMappingModal.shape.toLowerCase()]: shapeMappingValue.trim() };
+      setShapeMap(updated);
+      setForm((p) => ({ ...p, stock_group_id: shapeMappingValue.trim() }));
+      toast.success(`"${shapeMappingModal.shape}" mapped to ${shapeMappingValue.trim()}`);
+    } catch {
+      toast.error('Failed to save stock group mapping');
+    } finally {
+      setShapeMappingModal(null);
+      setShapeMappingValue('');
+    }
   };
 
   const removeRow = async (rowId) => {
@@ -302,8 +379,8 @@ export default function ParcelMasterPage() {
                     <td className="px-3 py-2">{r.clarity}</td>
                     <td className="px-3 py-2">{r.sieve_mm}</td>
                     <td className="px-3 py-2">{r.stock_group_id}</td>
-                    <td className="px-3 py-2 text-right">{Number(r.opening_weight_carats || 0).toFixed(2)}</td>
-                    <td className="px-3 py-2 text-right">{Number(askingCurrency === 'INR' ? r.asking_inr_amount : r.asking_usd_amount || 0).toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right">{fmtAmt(r.opening_weight_carats || 0)}</td>
+                    <td className="px-3 py-2 text-right">{fmtAmt(askingCurrency === 'INR' ? r.asking_price_inr_carats : r.asking_price_usd_carats)}</td>
                   </tr>
                 ))}
                 {tableRows.length === 0 && <tr><td colSpan={12} className="text-center px-3 py-5 text-gray-500">No records found</td></tr>}
@@ -325,6 +402,29 @@ export default function ParcelMasterPage() {
           onMerge={handleMerge}
           onDiscard={handleDiscard}
         />
+      )}
+      {shapeMappingModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
+            <h3 className="text-base font-semibold text-gray-800">Map Shape to Stock Group</h3>
+            <p className="text-sm text-gray-500">
+              What Stock Group does <span className="font-semibold text-gray-800">"{shapeMappingModal.shape}"</span> belong to?
+            </p>
+            <select
+              autoFocus
+              value={shapeMappingValue}
+              onChange={(e) => setShapeMappingValue(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none"
+            >
+              <option value="">Select Stock Group...</option>
+              {opts.group_ids.map((g) => <option key={g} value={g}>{g}</option>)}
+            </select>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setShapeMappingModal(null)} className="px-4 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg">Skip</button>
+              <button onClick={handleSaveShapeMapping} disabled={!shapeMappingValue} className="px-4 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg">Save Mapping</button>
+            </div>
+          </div>
+        </div>
       )}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Parcel Master / {isEditMode ? 'Edit Parcel Item' : 'Add Parcel Item Master'}</h1>

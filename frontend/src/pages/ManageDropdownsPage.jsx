@@ -25,6 +25,7 @@ export default function ManageDropdownsPage() {
   // Add state
   const [adding, setAdding] = useState(false);
   const [addText, setAddText] = useState('');
+  const [addShapeStockGroup, setAddShapeStockGroup] = useState('');
 
   // Usage dialog
   const [usageInfo, setUsageInfo] = useState(null);
@@ -103,8 +104,16 @@ export default function ManageDropdownsPage() {
     if (!val) return;
     try {
       await api.post(`/dropdown-options/${activeField}`, { value: val });
+      // If adding a shape, also save the stock group mapping
+      if (activeField === 'shape' && addShapeStockGroup.trim()) {
+        await api.post('/dropdown-options/shape-map', {
+          shape: val,
+          stock_group: addShapeStockGroup.trim(),
+        });
+      }
       toast.success(`Added "${val}"`);
       setAddText('');
+      setAddShapeStockGroup('');
       setAdding(false);
       fetchAll();
     } catch (e) {
@@ -124,7 +133,7 @@ export default function ManageDropdownsPage() {
           {FIELDS.map((f) => (
             <button
               key={f}
-              onClick={() => { setActiveField(f); setEditingValue(null); setAdding(false); }}
+              onClick={() => { setActiveField(f); setEditingValue(null); setAdding(false); setAddShapeStockGroup(''); }}
               className={`w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 activeField === f
                   ? 'bg-blue-600 text-white'
@@ -196,19 +205,30 @@ export default function ManageDropdownsPage() {
 
             {/* Add row */}
             {adding && (
-              <div className="flex items-center gap-3 px-5 py-3 bg-blue-50">
+              <div className="flex items-center gap-3 px-5 py-3 bg-blue-50 flex-wrap">
                 <input
                   autoFocus
                   value={addText}
                   onChange={(e) => setAddText(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') setAdding(false); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') { setAdding(false); setAddShapeStockGroup(''); } }}
                   placeholder={`New ${FIELD_LABELS[activeField]} value...`}
-                  className="flex-1 px-3 py-1.5 border border-blue-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 min-w-[140px] px-3 py-1.5 border border-blue-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {activeField === 'shape' && (
+                  <select
+                    value={addShapeStockGroup}
+                    onChange={(e) => setAddShapeStockGroup(e.target.value)}
+                    className="px-3 py-1.5 border border-blue-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    title="Stock Group for this shape"
+                  >
+                    <option value="">Stock Group...</option>
+                    {(allOptions['stock_group'] || []).map((g) => <option key={g} value={g}>{g}</option>)}
+                  </select>
+                )}
                 <button onClick={handleAdd} className="p-1.5 text-green-600 hover:bg-green-50 rounded">
                   <Check className="w-4 h-4" />
                 </button>
-                <button onClick={() => setAdding(false)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded">
+                <button onClick={() => { setAdding(false); setAddShapeStockGroup(''); }} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded">
                   <X className="w-4 h-4" />
                 </button>
               </div>
