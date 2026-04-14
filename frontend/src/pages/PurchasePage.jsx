@@ -9,6 +9,7 @@ import { getCurrentDateISO } from '../utils/dateDefaults';
 import { INIT_LINE_ITEM, applyLotAutoFields, calculateTotals, getCurrencyDefaults, normalizeLineItem } from '../utils/parcelTransactionCalc';
 import NumericInput from '../components/NumericInput';
 import { fmtAmt } from '../utils/format';
+import F from '../components/FormField';
 
 const INIT_ITEM = INIT_LINE_ITEM;
 
@@ -60,56 +61,6 @@ const numericFields = new Set([
   'inr_final_amount', 'usd_final_amount', 'transaction_final_amount',
 ]);
 const itemNumericFields = new Set(['issue_carats', 'reje_pct', 'rejection', 'selected_carat', 'pcs', 'rate', 'usd_rate', 'less1', 'less2', 'less3', 'amount']);
-
-function F({ label, name, value, onChange, options = [], type = 'text', searchable = false, readOnly = false, onAddNew }) {
-  const cls = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none';
-  const shouldSearch = options.length > 0 && (searchable || options.length > 10);
-  const isNumber = type === 'number';
-  return (
-    <div className="space-y-1">
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
-        {onAddNew && (
-          <button type="button" onClick={onAddNew} className="text-xs text-blue-600 hover:text-blue-800 font-medium">+ New</button>
-        )}
-      </div>
-      {options.length ? (
-        shouldSearch ? (
-          <>
-            <input
-              list={`list-${name}`}
-              value={value || ''}
-              onChange={(e) => onChange(name, e.target.value)}
-              placeholder={`Search ${label}`}
-              readOnly={readOnly}
-              className={cls}
-            />
-            <datalist id={`list-${name}`}>
-              {options.map((o) => <option key={o} value={o} />)}
-            </datalist>
-          </>
-        ) : (
-          <select value={value || ''} onChange={(e) => onChange(name, e.target.value)} disabled={readOnly} className={cls}>
-            <option value="">Select {label}</option>
-            {options.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        )
-      ) : readOnly && isNumber ? (
-        <input type="text" value={fmtAmt(value)} readOnly className={cls} />
-      ) : isNumber ? (
-        <NumericInput name={name} value={value} onChange={onChange} className={cls} />
-      ) : (
-        <input
-          type="text"
-          value={value ?? ''}
-          onChange={(e) => onChange(name, e.target.value)}
-          readOnly={readOnly}
-          className={cls}
-        />
-      )}
-    </div>
-  );
-}
 
 export default function PurchasePage() {
   const navigate = useNavigate();
