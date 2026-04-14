@@ -7,6 +7,7 @@ import F from '../components/FormField';
 import ListPageControls from '../components/ListPageControls';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { getCurrencyDefaults } from '../utils/parcelTransactionCalc';
+import { fmtAmt } from '../utils/format';
 
 const INIT = {
   date: getCurrentDateISO(),
@@ -182,10 +183,10 @@ export default function IncomeExpensePage() {
                     </td>
                     <td className="px-4 py-3">{r.main_account}</td>
                     <td className="px-4 py-3">{r.trn_account}</td>
-                    <td className="px-4 py-3 text-right">{(r.amount || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right">{fmtAmt(r.amount)}</td>
                     <td className="px-4 py-3">{r.currency}</td>
-                    <td className="px-4 py-3 text-right">{(r.inr_amt || 0).toFixed(2)}</td>
-                    <td className="px-4 py-3 text-right">{(r.usd_amt || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right">{fmtAmt(r.inr_amt)}</td>
+                    <td className="px-4 py-3 text-right">{fmtAmt(r.usd_amt)}</td>
                     <td className="px-4 py-3 max-w-xs truncate text-gray-500">{r.description}</td>
                   </tr>
                 ))}

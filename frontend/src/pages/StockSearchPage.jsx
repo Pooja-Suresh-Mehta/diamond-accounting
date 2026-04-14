@@ -3,6 +3,7 @@ import api from '../api';
 import toast from 'react-hot-toast';
 import { Search, RotateCcw, Download, Printer, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getCurrentDateISO } from '../utils/dateDefaults';
+import { fmtAmt } from '../utils/format';
 
 // ── Filter chip component ─────────────────────────────
 function Chip({ label, selected, onClick }) {
@@ -400,7 +401,7 @@ export default function StockSearchPage() {
                     <td className="px-3 py-2 text-gray-500">{(results.page - 1) * pageSize + i + 1}</td>
                     <td className="px-3 py-2 font-medium text-blue-600">{d.lot_no}</td>
                     <td className="px-3 py-2">{d.shape}</td>
-                    <td className="px-3 py-2 font-medium">{d.carats?.toFixed(2)}</td>
+                    <td className="px-3 py-2 font-medium">{fmtAmt(d.carats)}</td>
                     <td className="px-3 py-2">{d.color}</td>
                     <td className="px-3 py-2">{d.clarity}</td>
                     <td className="px-3 py-2">{d.cut}</td>

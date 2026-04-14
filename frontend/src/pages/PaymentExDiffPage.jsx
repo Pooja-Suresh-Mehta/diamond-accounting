@@ -7,6 +7,7 @@ import F from '../components/FormField';
 import ListPageControls from '../components/ListPageControls';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { getCurrencyDefaults } from '../utils/parcelTransactionCalc';
+import { fmtAmt } from '../utils/format';
 
 const INIT = {
   vtype: 'Receipt',
@@ -163,10 +164,10 @@ export default function PaymentExDiffPage() {
                     </td>
                     <td className="px-4 py-3">{r.main_account}</td>
                     <td className="px-4 py-3">{r.party_account}</td>
-                    <td className="px-4 py-3">{(r.received_dr || r.paid_cr || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3">{fmtAmt(r.received_dr || r.paid_cr)}</td>
                     <td className="px-4 py-3">{r.currency}</td>
-                    <td className="px-4 py-3">{(r.inr_amt || 0).toFixed(2)}</td>
-                    <td className="px-4 py-3">{(r.usd_amt || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3">{fmtAmt(r.inr_amt)}</td>
+                    <td className="px-4 py-3">{fmtAmt(r.usd_amt)}</td>
                     <td className="px-4 py-3 flex gap-2">
                       <button onClick={() => navigate(`/financial/payment-exdiff/edit/${r.id}`)} className="text-blue-600 hover:underline text-xs">Edit</button>
                       <button onClick={() => handleDelete(r.id)} className="text-red-600 hover:underline text-xs">Delete</button>

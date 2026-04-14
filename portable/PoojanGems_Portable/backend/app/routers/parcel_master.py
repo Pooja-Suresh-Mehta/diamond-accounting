@@ -14,7 +14,7 @@ from app.constants import (
 )
 from app.database import get_db
 from app.models.models import DropdownOption, ParcelMaster, User
-from app.schemas import ParcelMasterCreate, ParcelMasterOut, ParcelMasterUpdate
+from app.schemas import ParcelMasterCreate, ParcelMasterOut, ParcelMasterSimilarResponse, ParcelMasterUpdate
 
 router = APIRouter(prefix="/api/parcel-master", tags=["parcel-master"])
 
@@ -119,6 +119,128 @@ async def next_lot_number(
         if m:
             max_num = max(max_num, int(m.group(1)))
     return {"lot_no": f"{max_num + 1:04d}"}
+
+
+_SIMILARITY_FIELDS = [
+    "shape", "color", "clarity", "size", "sieve_mm",
+    "stock_group_id", "stock_type", "stock_subtype", "grown_process_type",
+]
+
+
+def _compute_merged_preview(existing: ParcelMaster, payload: ParcelMasterCreate) -> ParcelMasterOut:
+    """Return a ParcelMasterOut that represents what the merged entry would look like."""
+    old_w = existing.opening_weight_carats or 0.0
+    new_w = payload.opening_weight_carats or 0.0
+    total_w = old_w + new_w
+
+    new_cost_inr = (existing.purchase_cost_inr_amount or 0) + (payload.purchase_cost_inr_amount or 0)
+    new_cost_usd = (existing.purchase_cost_usd_amount or 0) + (payload.purchase_cost_usd_amount or 0)
+    new_asking_inr = (existing.asking_inr_amount or 0) + (payload.asking_inr_amount or 0)
+    new_asking_usd = (existing.asking_usd_amount or 0) + (payload.asking_usd_amount or 0)
+
+    # Weighted average purchase price
+    avg_price = (
+        ((existing.purchase_price or 0) * old_w + (payload.purchase_price or 0) * new_w) / total_w
+        if total_w > 0 else (existing.purchase_price or 0)
+    )
+
+    return ParcelMasterOut(
+        id=existing.id,
+        company_id=existing.company_id,
+        lot_no=existing.lot_no,
+        item_name=existing.item_name,
+        shape=existing.shape,
+        color=existing.color,
+        clarity=existing.clarity,
+        size=existing.size,
+        sieve_mm=existing.sieve_mm,
+        stock_group_id=existing.stock_group_id,
+        description=existing.description,
+        stock_type=existing.stock_type,
+        stock_subtype=existing.stock_subtype,
+        grown_process_type=existing.grown_process_type,
+        opening_weight_carats=round(total_w, 4),
+        purchase_price=round(avg_price, 2),
+        purchase_price_currency=existing.purchase_price_currency,
+        usd_to_inr_rate=existing.usd_to_inr_rate or 0,
+        purchase_cost_inr_amount=round(new_cost_inr, 2),
+        purchase_cost_usd_amount=round(new_cost_usd, 2),
+        purchase_cost_inr_carat=round(new_cost_inr / total_w, 2) if total_w > 0 else 0,
+        purchase_cost_usd_carat=round(new_cost_usd / total_w, 2) if total_w > 0 else 0,
+        asking_inr_amount=round(new_asking_inr, 2),
+        asking_usd_amount=round(new_asking_usd, 2),
+        asking_price_inr_carats=round(new_asking_inr / total_w, 2) if total_w > 0 else 0,
+        asking_price_usd_carats=round(new_asking_usd / total_w, 2) if total_w > 0 else 0,
+        purchased_weight=existing.purchased_weight or 0,
+        purchased_pcs=existing.purchased_pcs or 0,
+        sold_weight=existing.sold_weight or 0,
+        sold_pcs=existing.sold_pcs or 0,
+        on_memo_weight=existing.on_memo_weight or 0,
+        on_memo_pcs=existing.on_memo_pcs or 0,
+        consignment_weight=existing.consignment_weight or 0,
+        consignment_pcs=existing.consignment_pcs or 0,
+        created_by_name=existing.created_by_name,
+        created_at=existing.created_at,
+        updated_at=existing.updated_at,
+    )
+
+
+@router.post("/check-similar", response_model=ParcelMasterSimilarResponse)
+async def check_similar_parcel(
+    payload: ParcelMasterCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Check if a similar parcel entry already exists (matching on all classification fields)."""
+    q = select(ParcelMaster).where(ParcelMaster.company_id == current_user.company_id)
+    for field in _SIMILARITY_FIELDS:
+        val = (getattr(payload, field, None) or "").strip().lower()
+        col = getattr(ParcelMaster, field)
+        if val:
+            q = q.where(func.lower(col) == val)
+        else:
+            q = q.where((col == None) | (col == ""))  # noqa: E711
+    existing = (await db.execute(q)).scalar_one_or_none()
+    if not existing:
+        return ParcelMasterSimilarResponse(existing=None, merged_preview=None)
+    return ParcelMasterSimilarResponse(
+        existing=ParcelMasterOut.model_validate(existing),
+        merged_preview=_compute_merged_preview(existing, payload),
+    )
+
+
+@router.post("/merge/{parcel_id}", response_model=ParcelMasterOut)
+async def merge_parcel(
+    parcel_id: str,
+    payload: ParcelMasterCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Merge the given new-entry payload into an existing parcel, combining weights and costs."""
+    row = (await db.execute(
+        select(ParcelMaster).where(
+            ParcelMaster.id == parcel_id,
+            ParcelMaster.company_id == current_user.company_id,
+        )
+    )).scalar_one_or_none()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parcel item not found")
+
+    preview = _compute_merged_preview(row, payload)
+    row.opening_weight_carats = preview.opening_weight_carats
+    row.purchase_price = preview.purchase_price
+    row.purchase_cost_inr_amount = preview.purchase_cost_inr_amount
+    row.purchase_cost_usd_amount = preview.purchase_cost_usd_amount
+    row.purchase_cost_inr_carat = preview.purchase_cost_inr_carat
+    row.purchase_cost_usd_carat = preview.purchase_cost_usd_carat
+    row.asking_inr_amount = preview.asking_inr_amount
+    row.asking_usd_amount = preview.asking_usd_amount
+    row.asking_price_inr_carats = preview.asking_price_inr_carats
+    row.asking_price_usd_carats = preview.asking_price_usd_carats
+
+    await db.commit()
+    await db.refresh(row)
+    return ParcelMasterOut.model_validate(row)
 
 
 @router.get("/{parcel_id}", response_model=ParcelMasterOut)

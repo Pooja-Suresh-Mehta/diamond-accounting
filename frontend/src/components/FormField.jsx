@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import NumericInput from './NumericInput';
+import { fmtAmt } from '../utils/format';
 
 export default function FormField({
   label, name, value, onChange, options = [], type = 'text',
@@ -7,16 +9,6 @@ export default function FormField({
   const cls = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none';
   const shouldSearch = options.length > 0 && (searchable || options.length > 10);
   const isNumber = type === 'number';
-  const numericZero = isNumber && Number(value || 0) === 0;
-  const inputValue = isNumber && numericZero ? '' : (value ?? '');
-
-  const handleBlur = (e) => {
-    if (!isNumber) return;
-    const raw = e.target.value;
-    if (raw === '') return onChange(name, 0);
-    const n = Number(raw);
-    onChange(name, Number.isFinite(n) ? Number(n.toFixed(2)) : 0);
-  };
 
   if (shouldSearch) {
     return (
@@ -52,17 +44,19 @@ export default function FormField({
           {options.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
       ) : (
-        <input
-          type={type}
-          value={inputValue}
-          onFocus={() => { if (isNumber && numericZero) onChange(name, ''); }}
-          onBlur={handleBlur}
-          onChange={(e) => onChange(name, e.target.value)}
-          readOnly={readOnly}
-          placeholder={isNumber ? '0.00' : ''}
-          step={isNumber ? '0.01' : undefined}
-          className={cls}
-        />
+        readOnly && isNumber ? (
+          <input type="text" value={fmtAmt(value)} readOnly className={cls} />
+        ) : isNumber ? (
+          <NumericInput name={name} value={value} onChange={onChange} className={cls} />
+        ) : (
+          <input
+            type="text"
+            value={value ?? ''}
+            onChange={(e) => onChange(name, e.target.value)}
+            readOnly={readOnly}
+            className={cls}
+          />
+        )
       )}
     </div>
   );

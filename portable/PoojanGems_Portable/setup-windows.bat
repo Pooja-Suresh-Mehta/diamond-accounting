@@ -50,7 +50,10 @@ echo.
 
 REM -- Install app dependencies --
 echo [SETUP] Installing app dependencies (1-2 minutes)...
-"%APP_DIR%python\python.exe" -m pip install -q -r "%APP_DIR%backend\requirements.txt" --no-warn-script-location
+"%APP_DIR%python\python.exe" -m pip install -q --no-cache-dir -r "%APP_DIR%backend\requirements-windows.txt" --no-warn-script-location
+
+REM -- Clean up pip cache to save disk space --
+"%APP_DIR%python\python.exe" -m pip cache purge >nul 2>&1
 
 REM -- Create data directory --
 if not exist "%APP_DIR%data" mkdir "%APP_DIR%data"

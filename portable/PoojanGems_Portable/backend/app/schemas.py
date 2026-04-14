@@ -399,6 +399,11 @@ class ParcelMasterOut(ParcelMasterBase):
         from_attributes = True
 
 
+class ParcelMasterSimilarResponse(BaseModel):
+    existing: Optional["ParcelMasterOut"] = None
+    merged_preview: Optional["ParcelMasterOut"] = None
+
+
 # ── Parcel Purchase ─────────────────────────────────────
 
 class ParcelPurchaseItemBase(BaseModel):

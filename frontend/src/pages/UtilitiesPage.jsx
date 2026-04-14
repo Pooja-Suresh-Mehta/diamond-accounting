@@ -7,6 +7,8 @@ import { useState, useRef } from 'react';
 import { Download, Upload, RefreshCw, ArrowLeftRight, FileSpreadsheet, ClipboardList, Printer, Plus, Search } from 'lucide-react';
 import api from '../api';
 import toast from 'react-hot-toast';
+import NumericInput from '../components/NumericInput';
+import { fmtAmt } from '../utils/format';
 
 const TABS = [
   { id: 'download-mrp',           label: '29 Download MRP' },
@@ -487,13 +489,13 @@ function StockTransfer() {
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-600">FItemRate</label>
-              <input type="number" value={form.f_item_rate} onChange={e => set('f_item_rate', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" placeholder="FItemRate" />
+              <NumericInput name="f_item_rate" value={form.f_item_rate} onChange={(_, val) => set('f_item_rate', val)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-600">Carats</label>
-              <input type="number" value={form.carats} onChange={e => set('carats', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" placeholder="Carats" />
+              <NumericInput name="carats" value={form.carats} onChange={(_, val) => set('carats', val)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-600">To Lot (TLot)</label>

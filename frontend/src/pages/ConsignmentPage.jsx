@@ -8,6 +8,8 @@ import ListPageControls from '../components/ListPageControls';
 import PartyField, { BrokerField } from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { INIT_LINE_ITEM, applyLotAutoFields, calculateTotals, getCurrencyDefaults, normalizeLineItem } from '../utils/parcelTransactionCalc';
+import NumericInput from '../components/NumericInput';
+import { fmtAmt } from '../utils/format';
 
 const INIT_ITEM = { ...INIT_LINE_ITEM };
 
@@ -226,7 +228,7 @@ export default function ConsignmentPage() {
                     <td className="px-4 py-3">{r.date}</td>
                     <td className="px-4 py-3">{r.party}</td>
                     <td className="px-4 py-3">{r.currency}</td>
-                    <td className="px-4 py-3">{(r.usd_amt || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3">{fmtAmt(r.usd_amt)}</td>
                     <td className="px-4 py-3"><span className="px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-800">{r.payment_status}</span></td>
                     <td className="px-4 py-3 flex gap-2">
                       <button onClick={() => navigate(`/parcel/consignment-in/edit/${r.id}`)} className="text-blue-600 hover:underline text-xs">Edit</button>
@@ -319,10 +321,15 @@ export default function ConsignmentPage() {
                           {o.map(v => <option key={v} value={v}>{v}</option>)}
                         </select>
                       ) : (
-                        <input type={type} value={type === 'number' && Number(item[name] || 0) === 0 ? '' : (item[name] ?? '')}
-                          readOnly={readOnly}
-                          onChange={e => handleItem(idx, name, e.target.value)}
-                          className={`w-full text-xs border border-gray-200 rounded px-1 py-1 ${readOnly ? 'bg-gray-50' : ''}`} />
+                        readOnly && type === 'number' ? (
+                          <input type="text" value={fmtAmt(item[name])} readOnly className="w-full text-xs border border-gray-200 rounded px-1 py-1 bg-gray-50" />
+                        ) : type === 'number' && !name.endsWith('_pct') ? (
+                          <NumericInput name={name} value={item[name]} onChange={(_, val) => handleItem(idx, name, val)} className="w-full text-xs border border-gray-200 rounded px-1 py-1" />
+                        ) : type === 'number' ? (
+                          <input type="number" value={item[name] ?? ''} onChange={e => handleItem(idx, name, e.target.value)} className="w-full text-xs border border-gray-200 rounded px-1 py-1" />
+                        ) : (
+                          <input type="text" value={item[name] ?? ''} readOnly={readOnly} onChange={e => handleItem(idx, name, e.target.value)} className={`w-full text-xs border border-gray-200 rounded px-1 py-1 ${readOnly ? 'bg-gray-50' : ''}`} />
+                        )
                       )}
                     </td>
                   ))}

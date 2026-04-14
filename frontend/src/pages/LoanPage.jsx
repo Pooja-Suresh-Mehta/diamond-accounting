@@ -8,6 +8,7 @@ import ListPageControls from '../components/ListPageControls';
 import PartyField, { BrokerField } from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { getCurrencyDefaults } from '../utils/parcelTransactionCalc';
+import { fmtAmt } from '../utils/format';
 
 const INIT = {
   loan_type: 'Given',
@@ -176,7 +177,7 @@ export default function LoanPage({ loanType: propLoanType }) {
                     <td className="px-4 py-3">{r.date}</td>
                     <td className="px-4 py-3 font-medium">{r.party}</td>
                     <td className="px-4 py-3">{r.currency}</td>
-                    <td className="px-4 py-3">{(r.amount || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3">{fmtAmt(r.amount)}</td>
                     <td className="px-4 py-3">{r.interest_pct || 0}</td>
                     <td className="px-4 py-3">{r.broker}</td>
                     <td className="px-4 py-3">{r.rec_from_party}</td>

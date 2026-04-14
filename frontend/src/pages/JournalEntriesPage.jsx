@@ -7,6 +7,7 @@ import F from '../components/FormField';
 import ListPageControls from '../components/ListPageControls';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { getCurrencyDefaults } from '../utils/parcelTransactionCalc';
+import { fmtAmt } from '../utils/format';
 
 const INIT = {
   vtype: 'Journal',
@@ -160,10 +161,10 @@ export default function JournalEntriesPage() {
                     <td className="px-4 py-3">{r.vtype}</td>
                     <td className="px-4 py-3">{r.credit_account}</td>
                     <td className="px-4 py-3 font-medium">{r.debit_account}</td>
-                    <td className="px-4 py-3">{(r.amount || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3">{fmtAmt(r.amount)}</td>
                     <td className="px-4 py-3">{r.currency}</td>
-                    <td className="px-4 py-3">{(r.inr_amt || 0).toFixed(2)}</td>
-                    <td className="px-4 py-3">{(r.usd_amt || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3">{fmtAmt(r.inr_amt)}</td>
+                    <td className="px-4 py-3">{fmtAmt(r.usd_amt)}</td>
                     <td className="px-4 py-3 flex gap-2">
                       <button onClick={() => navigate(`/financial/journal-entries/edit/${r.id}`)} className="text-blue-600 hover:underline text-xs">Edit</button>
                       <button onClick={() => handleDelete(r.id)} className="text-red-600 hover:underline text-xs">Delete</button>

@@ -16,32 +16,19 @@ set "PYTHONDONTWRITEBYTECODE=1"
 set "PYTHONPYCACHEPREFIX=%TEMP%\poojan_pycache"
 set "PIP_NO_CACHE_DIR=1"
 
-REM -- Local data folder on C drive (fast local I/O) --
-set "LOCAL_DATA=C:\PoojanGems_Data"
-if not exist "%LOCAL_DATA%" mkdir "%LOCAL_DATA%"
-
 REM -- Local backup folder on C drive --
 set "LOCAL_BACKUP=C:\PoojanGems_Backup"
 if not exist "%LOCAL_BACKUP%" mkdir "%LOCAL_BACKUP%"
 
-REM -- Create portable data folder (for syncing back) --
+REM -- Create data folder --
 if not exist "%APP_DIR%data" mkdir "%APP_DIR%data"
 
-REM -- Sync DB from pendrive to laptop on startup --
-if exist "%APP_DIR%data\diamond_accounting.db" (
-    if not exist "%LOCAL_DATA%\diamond_accounting.db" (
-        echo [SYNC] Copying database from pendrive to laptop...
-        copy /y "%APP_DIR%data\diamond_accounting.db" "%LOCAL_DATA%\diamond_accounting.db" >nul 2>&1
-        echo [OK] Database synced to local disk.
-    )
-)
-
 REM -- Backup existing DB before starting (keep last 5 only) --
-if exist "%LOCAL_DATA%\diamond_accounting.db" (
+if exist "%APP_DIR%data\diamond_accounting.db" (
     echo [BACKUP] Saving database to local backup...
     set "STAMP=%date:~10,4%%date:~4,2%%date:~7,2%_%time:~0,2%%time:~3,2%%time:~6,2%"
     set "STAMP=!STAMP: =0!"
-    copy /y "%LOCAL_DATA%\diamond_accounting.db" "%LOCAL_BACKUP%\backup_!STAMP!.db" >nul 2>&1
+    copy /y "%APP_DIR%data\diamond_accounting.db" "%LOCAL_BACKUP%\backup_!STAMP!.db" >nul 2>&1
     echo [OK] Backup saved to %LOCAL_BACKUP%
     echo.
     REM -- Prune: keep only the 5 most recent backups --
@@ -89,9 +76,9 @@ echo.
 
 REM -- Write .env before any app imports --
 echo SECRET_KEY=poojan-gems-portable-secret-2025> "%APP_DIR%backend\.env"
-echo DATABASE_URL=sqlite+aiosqlite:///%LOCAL_DATA%\diamond_accounting.db>> "%APP_DIR%backend\.env"
+echo DATABASE_URL=sqlite+aiosqlite:///%APP_DIR%data\diamond_accounting.db>> "%APP_DIR%backend\.env"
 set "SECRET_KEY=poojan-gems-portable-secret-2025"
-set "DATABASE_URL=sqlite+aiosqlite:///%LOCAL_DATA%\diamond_accounting.db"
+set "DATABASE_URL=sqlite+aiosqlite:///%APP_DIR%data\diamond_accounting.db"
 
 echo [CHECK] Testing uvicorn import...
 "!PYTHON!" -c "import uvicorn; print('  uvicorn OK')"
@@ -131,11 +118,6 @@ echo.
 "!PYTHON!" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir "%APP_DIR%backend" --log-level warning
 echo.
 echo [INFO] Server exited with code: !errorlevel!
-
-REM -- Sync DB back to pendrive for portability --
-echo [SYNC] Copying database back to pendrive...
-copy /y "%LOCAL_DATA%\diamond_accounting.db" "%APP_DIR%data\diamond_accounting.db" >nul 2>&1
-echo [OK] Database synced to pendrive.
 
 :end
 echo.

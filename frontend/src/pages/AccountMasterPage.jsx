@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import { Download, Plus, Save, Trash2, Pencil } from 'lucide-react';
 import api from '../api';
 import ListPageControls from '../components/ListPageControls';
+import NumericInput from '../components/NumericInput';
+import { fmtAmt } from '../utils/format';
 
 const UNDER_GROUP_OPTIONS = [
   'Assets', 'Liabilities', 'Income', 'Expense', 'Fixed Assets', 'Current Assets',
@@ -218,11 +220,16 @@ function BaseField({ name, label, value, onChange, options = [], error = '', onB
     );
   }
 
-  const type = name === 'email' ? 'email' : numericFields.has(name) ? 'number' : 'text';
+  const isNum = numericFields.has(name) && !name.endsWith('_pct') && !name.endsWith('_per');
+  const type = name === 'email' ? 'email' : (!isNum && numericFields.has(name)) ? 'number' : 'text';
   return (
     <div className="space-y-1">
       <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
-      <input type={type} value={value ?? ''} onChange={(e) => onChange(name, e.target.value)} onBlur={() => onBlur?.(name)} className={common} />
+      {isNum ? (
+        <NumericInput name={name} value={value} onChange={onChange} className={common} />
+      ) : (
+        <input type={type} value={value ?? ''} onChange={(e) => onChange(name, e.target.value)} onBlur={() => onBlur?.(name)} className={common} />
+      )}
       {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
@@ -619,7 +626,7 @@ export default function AccountMasterPage() {
                     <td className="px-3 py-2">{r.account_type}</td>
                     <td className="px-3 py-2">{r.currency}</td>
                     <td className="px-3 py-2">{r.balance_type === 'Credit' ? 'C' : 'D'}</td>
-                    <td className="px-3 py-2 text-right">{Number(r.opening_balance).toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right">{fmtAmt(r.opening_balance)}</td>
                     <td className="px-3 py-2">{r.country || ''}</td>
                     <td className="px-3 py-2">{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
                     <td className="px-3 py-2">{r.created_by_name || ''}</td>

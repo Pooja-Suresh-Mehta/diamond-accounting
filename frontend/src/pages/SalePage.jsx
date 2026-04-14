@@ -7,6 +7,8 @@ import ListPageControls from '../components/ListPageControls';
 import PartyField, { BrokerField } from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { INIT_LINE_ITEM, applyLotAutoFields, calculateTotals, getCurrencyDefaults, normalizeLineItem } from '../utils/parcelTransactionCalc';
+import NumericInput from '../components/NumericInput';
+import { fmtAmt } from '../utils/format';
 
 const INIT_ITEM = { ...INIT_LINE_ITEM, cogs: 0 };
 
@@ -64,15 +66,6 @@ function F({ label, name, value, onChange, options = [], type = 'text', searchab
   const cls = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none';
   const shouldSearch = options.length > 0 && (searchable || options.length > 10);
   const isNumber = type === 'number';
-  const numericZero = isNumber && Number(value || 0) === 0;
-  const inputValue = isNumber && numericZero ? '' : (value ?? '');
-  const handleBlur = (e) => {
-    if (!isNumber) return;
-    const raw = e.target.value;
-    if (raw === '') return onChange(name, 0);
-    const n = Number(raw);
-    onChange(name, Number.isFinite(n) ? Number(n.toFixed(2)) : 0);
-  };
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between">
@@ -94,12 +87,14 @@ function F({ label, name, value, onChange, options = [], type = 'text', searchab
             {options.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
         )
+      ) : readOnly && isNumber ? (
+        <input type="text" value={fmtAmt(value)} readOnly className={cls} />
+      ) : isNumber ? (
+        <NumericInput name={name} value={value} onChange={onChange} className={cls} />
       ) : (
-        <input type={type} value={inputValue}
-          onFocus={() => { if (isNumber && numericZero) onChange(name, ''); }}
-          onBlur={handleBlur}
+        <input type="text" value={value ?? ''}
           onChange={(e) => onChange(name, e.target.value)}
-          readOnly={readOnly} placeholder={isNumber ? '0.00' : ''} step={isNumber ? '0.01' : undefined}
+          readOnly={readOnly}
           className={cls} />
       )}
     </div>
@@ -346,11 +341,11 @@ export default function SalePage() {
                     <td className="px-3 py-2">{r.purchase_type}</td>
                     <td className="px-3 py-2">{r.sub_type}</td>
                     <td className="px-3 py-2">{r.category}</td>
-                    <td className="px-3 py-2 text-right">{Number(r.total_carats || 0).toFixed(2)}</td>
-                    <td className="px-3 py-2 text-right">{Number(r.total_amount || 0).toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right">{fmtAmt(r.total_carats)}</td>
+                    <td className="px-3 py-2 text-right">{fmtAmt(r.total_amount)}</td>
                     <td className="px-3 py-2">{r.currency}</td>
-                    <td className="px-3 py-2 text-right">{Number(r.inr_amt || 0).toFixed(2)}</td>
-                    <td className="px-3 py-2 text-right">{Number(r.usd_amt || 0).toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right">{fmtAmt(r.inr_amt)}</td>
+                    <td className="px-3 py-2 text-right">{fmtAmt(r.usd_amt)}</td>
                     <td className="px-3 py-2">{r.due_date || ''}</td>
                     <td className="px-3 py-2">{r.payment_status}</td>
                   </tr>
@@ -432,21 +427,21 @@ export default function SalePage() {
               <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Less1</label>
               <div className="flex gap-1">
                 <select className="w-12 px-1 py-2 border rounded" value={lotDraft.less1_sign || '-'} onChange={(e) => setLessSign('less1_sign', e.target.value)}><option value="-">-</option><option value="+">+</option></select>
-                <input type="number" className="w-full px-2 py-2 border rounded text-right" value={lotDraft.less1} onChange={(e) => setItemValue('less1', e.target.value)} />
+                <NumericInput name="less1" value={lotDraft.less1} onChange={(_, val) => setItemValue('less1', val)} className="w-full px-2 py-2 border rounded text-right" />
               </div>
             </div>
             <div className="space-y-1">
               <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Less2</label>
               <div className="flex gap-1">
                 <select className="w-12 px-1 py-2 border rounded" value={lotDraft.less2_sign || '-'} onChange={(e) => setLessSign('less2_sign', e.target.value)}><option value="-">-</option><option value="+">+</option></select>
-                <input type="number" className="w-full px-2 py-2 border rounded text-right" value={lotDraft.less2} onChange={(e) => setItemValue('less2', e.target.value)} />
+                <NumericInput name="less2" value={lotDraft.less2} onChange={(_, val) => setItemValue('less2', val)} className="w-full px-2 py-2 border rounded text-right" />
               </div>
             </div>
             <div className="space-y-1">
               <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Less3</label>
               <div className="flex gap-1">
                 <select className="w-12 px-1 py-2 border rounded" value={lotDraft.less3_sign || '+'} onChange={(e) => setLessSign('less3_sign', e.target.value)}><option value="+">+</option><option value="-">-</option></select>
-                <input type="number" className="w-full px-2 py-2 border rounded text-right" value={lotDraft.less3} onChange={(e) => setItemValue('less3', e.target.value)} />
+                <NumericInput name="less3" value={lotDraft.less3} onChange={(_, val) => setItemValue('less3', val)} className="w-full px-2 py-2 border rounded text-right" />
               </div>
             </div>
             <F label="Amount" name="amount" value={lotDraft.amount} onChange={setItemValue} type="number" readOnly />
@@ -469,18 +464,18 @@ export default function SalePage() {
                     <tr key={`${it.lot_number}-${idx}`} className="border-t border-gray-100">
                       <td className="px-2 py-2">{it.lot_number}</td>
                       <td className="px-2 py-2">{it.item_name}</td>
-                      <td className="px-2 py-2 text-right">{Number(it.issue_carats || 0).toFixed(2)}</td>
-                      <td className="px-2 py-2 text-right">{Number(it.reje_pct || 0).toFixed(2)}</td>
-                      <td className="px-2 py-2 text-right">{Number(it.rejection || 0).toFixed(2)}</td>
-                      <td className="px-2 py-2 text-right">{Number(it.selected_carat || 0).toFixed(2)}</td>
+                      <td className="px-2 py-2 text-right">{fmtAmt(it.issue_carats)}</td>
+                      <td className="px-2 py-2 text-right">{fmtAmt(it.reje_pct)}</td>
+                      <td className="px-2 py-2 text-right">{fmtAmt(it.rejection)}</td>
+                      <td className="px-2 py-2 text-right">{fmtAmt(it.selected_carat)}</td>
                       <td className="px-2 py-2 text-right">{Number(it.pcs || 0)}</td>
-                      <td className="px-2 py-2 text-right">{Number(it.rate || 0).toFixed(2)}</td>
-                      <td className="px-2 py-2 text-right">{Number(it.usd_rate || 0).toFixed(2)}</td>
-                      <td className="px-2 py-2 text-right">{Number(it.cogs || 0).toFixed(2)}</td>
-                      <td className="px-2 py-2 text-right">{`${it.less1_sign || '-'}${Number(it.less1 || 0).toFixed(2)}`}</td>
-                      <td className="px-2 py-2 text-right">{`${it.less2_sign || '-'}${Number(it.less2 || 0).toFixed(2)}`}</td>
-                      <td className="px-2 py-2 text-right">{`${it.less3_sign || '+'}${Number(it.less3 || 0).toFixed(2)}`}</td>
-                      <td className="px-2 py-2 text-right">{Number(it.amount || 0).toFixed(2)}</td>
+                      <td className="px-2 py-2 text-right">{fmtAmt(it.rate)}</td>
+                      <td className="px-2 py-2 text-right">{fmtAmt(it.usd_rate)}</td>
+                      <td className="px-2 py-2 text-right">{fmtAmt(it.cogs)}</td>
+                      <td className="px-2 py-2 text-right">{`${it.less1_sign || '-'}${fmtAmt(it.less1)}`}</td>
+                      <td className="px-2 py-2 text-right">{`${it.less2_sign || '-'}${fmtAmt(it.less2)}`}</td>
+                      <td className="px-2 py-2 text-right">{`${it.less3_sign || '+'}${fmtAmt(it.less3)}`}</td>
+                      <td className="px-2 py-2 text-right">{fmtAmt(it.amount)}</td>
                       <td className="px-2 py-2"><button onClick={() => removeSubmittedLot(idx)} className="text-red-600"><Trash2 className="w-4 h-4" /></button></td>
                     </tr>
                   ))}
@@ -493,32 +488,32 @@ export default function SalePage() {
         {/* Amount section */}
         <div className="border-t pt-5 grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div className="space-y-3">
-            <div className="flex items-center justify-between"><span className="font-semibold text-gray-700">Net Amount ({form.currency || 'USD'})</span><span className="text-2xl font-bold text-gray-700">{Number(form.net_amount || 0).toFixed(2)}</span></div>
+            <div className="flex items-center justify-between"><span className="font-semibold text-gray-700">Net Amount ({form.currency || 'USD'})</span><span className="text-2xl font-bold text-gray-700">{fmtAmt(form.net_amount)}</span></div>
             <div className="grid grid-cols-3 gap-2 items-center">
               <span className="font-semibold text-gray-700">CGST%</span>
               <input type="number" className="px-3 py-2 text-sm border rounded" value={form.cgst_pct || ''} placeholder="0.00" step="0.01" onChange={(e) => setValue('cgst_pct', e.target.value)} />
-              <input type="number" className="px-3 py-2 text-sm border rounded bg-gray-100 text-right" value={form.cgst_amount} readOnly />
+              <input type="text" className="px-3 py-2 text-sm border rounded bg-gray-100 text-right" value={fmtAmt(form.cgst_amount)} readOnly />
             </div>
             <div className="grid grid-cols-3 gap-2 items-center">
               <span className="font-semibold text-gray-700">SGST%</span>
               <input type="number" className="px-3 py-2 text-sm border rounded" value={form.sgst_pct || ''} placeholder="0.00" step="0.01" onChange={(e) => setValue('sgst_pct', e.target.value)} />
-              <input type="number" className="px-3 py-2 text-sm border rounded bg-gray-100 text-right" value={form.sgst_amount} readOnly />
+              <input type="text" className="px-3 py-2 text-sm border rounded bg-gray-100 text-right" value={fmtAmt(form.sgst_amount)} readOnly />
             </div>
             <div className="grid grid-cols-3 gap-2 items-center">
               <span className="font-semibold text-gray-700">IGST%</span>
               <input type="number" className="px-3 py-2 text-sm border rounded" value={form.igst_pct || ''} placeholder="0.00" step="0.01" onChange={(e) => setValue('igst_pct', e.target.value)} />
-              <input type="number" className="px-3 py-2 text-sm border rounded bg-gray-100 text-right" value={form.igst_amount} readOnly />
+              <input type="text" className="px-3 py-2 text-sm border rounded bg-gray-100 text-right" value={fmtAmt(form.igst_amount)} readOnly />
             </div>
             <div className="grid grid-cols-3 gap-2 items-center">
               <span className="font-semibold text-gray-700">VAT%</span>
               <input type="number" className="px-3 py-2 text-sm border rounded" value={form.vat_pct || ''} placeholder="0.00" step="0.01" onChange={(e) => setValue('vat_pct', e.target.value)} />
-              <input type="number" className="px-3 py-2 text-sm border rounded bg-gray-100 text-right" value={form.vat_amount} readOnly />
+              <input type="text" className="px-3 py-2 text-sm border rounded bg-gray-100 text-right" value={fmtAmt(form.vat_amount)} readOnly />
             </div>
           </div>
           <div className="space-y-3 border-t lg:border-t-0 lg:border-l pt-3 lg:pt-0 lg:pl-5">
-            <div className="flex items-center justify-between text-blue-600 font-semibold"><span>INR FINAL AMOUNT</span><span className="text-3xl">{Number(form.inr_final_amount || 0).toFixed(2)}</span></div>
-            <div className="flex items-center justify-between text-blue-600 font-semibold"><span>USD FINAL AMOUNT</span><span className="text-3xl">{Number(form.usd_final_amount || 0).toFixed(2)}</span></div>
-            <div className="flex items-center justify-between text-blue-600 font-semibold"><span>TRANSACTION FINAL AMOUNT</span><span className="text-3xl">{Number(form.transaction_final_amount || 0).toFixed(2)}</span></div>
+            <div className="flex items-center justify-between text-blue-600 font-semibold"><span>INR FINAL AMOUNT</span><span className="text-3xl">{fmtAmt(form.inr_final_amount)}</span></div>
+            <div className="flex items-center justify-between text-blue-600 font-semibold"><span>USD FINAL AMOUNT</span><span className="text-3xl">{fmtAmt(form.usd_final_amount)}</span></div>
+            <div className="flex items-center justify-between text-blue-600 font-semibold"><span>TRANSACTION FINAL AMOUNT</span><span className="text-3xl">{fmtAmt(form.transaction_final_amount)}</span></div>
           </div>
         </div>
       </div>

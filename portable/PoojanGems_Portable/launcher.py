@@ -26,22 +26,15 @@ else:
     APP_DIR = Path(__file__).parent
 
 BACKEND_DIR = APP_DIR / "backend"
-PORTABLE_DATA_DIR = APP_DIR / "data"
+DATA_DIR = APP_DIR / "data"
+DB_FILE = DATA_DIR / "diamond_accounting.db"
 ENV_FILE = BACKEND_DIR / ".env"
 
-# Store the DB on the laptop's local disk for reliable I/O.
-# The pendrive copy is treated as a portable snapshot that gets
-# synced on startup (pendrive → laptop) and shutdown (laptop → pendrive).
+# Local backup folder
 if sys.platform == "win32":
-    LOCAL_DATA_DIR = Path("C:/PoojanGems_Data")
     LOCAL_BACKUP = Path("C:/PoojanGems_Backup")
 else:
-    LOCAL_DATA_DIR = Path.home() / "PoojanGems_Data"
     LOCAL_BACKUP = Path.home() / "PoojanGems_Backup"
-
-DB_NAME = "diamond_accounting.db"
-DB_FILE = LOCAL_DATA_DIR / DB_NAME
-PORTABLE_DB_FILE = PORTABLE_DATA_DIR / DB_NAME
 
 PORT = 8000
 URL = f"http://localhost:{PORT}"
@@ -67,29 +60,9 @@ def backup_db(tag=""):
         pass
 
 
-def sync_db_to_local():
-    """On startup: copy pendrive DB → laptop if laptop copy is missing or older."""
-    LOCAL_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    PORTABLE_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    if not PORTABLE_DB_FILE.exists():
-        return  # first run — DB will be created on laptop
-    if not DB_FILE.exists() or PORTABLE_DB_FILE.stat().st_mtime > DB_FILE.stat().st_mtime:
-        shutil.copy2(PORTABLE_DB_FILE, DB_FILE)
-
-
-def sync_db_to_pendrive():
-    """On shutdown: copy laptop DB → pendrive so data travels with the drive."""
-    try:
-        PORTABLE_DATA_DIR.mkdir(parents=True, exist_ok=True)
-        if DB_FILE.exists():
-            shutil.copy2(DB_FILE, PORTABLE_DB_FILE)
-    except Exception:
-        pass  # pendrive may already be disconnected
-
-
 def write_env():
-    """Write .env file for the backend, pointing to the local-disk DB."""
-    LOCAL_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    """Write .env file for the backend."""
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     with open(ENV_FILE, "w") as f:
         f.write(f"SECRET_KEY=poojan-gems-portable-secret-2025\n")
         f.write(f"DATABASE_URL=sqlite+aiosqlite:///{DB_FILE}\n")
@@ -322,11 +295,10 @@ def run_without_tray():
 
 
 def main():
-    # Step 1: Sync DB from pendrive → laptop, then backup
-    sync_db_to_local()
+    # Step 1: Backup
     backup_db("start")
 
-    # Step 2: Write env (points to local-disk DB)
+    # Step 2: Write env
     write_env()
 
     # Step 3: Kill leftover server if any
@@ -348,10 +320,9 @@ def main():
     except Exception:
         run_without_tray()
 
-    # Step 6: Cleanup — sync DB back to pendrive for portability
+    # Step 6: Cleanup
     stop_server()
     backup_db("exit")
-    sync_db_to_pendrive()
 
 
 if __name__ == "__main__":
