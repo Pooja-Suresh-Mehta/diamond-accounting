@@ -6,6 +6,7 @@ import api from '../api';
 import ListPageControls from '../components/ListPageControls';
 import CreatableField from '../components/CreatableField';
 import MergeDialog from '../components/MergeDialog';
+import NumericInput from '../components/NumericInput';
 import { fmtAmt } from '../utils/format';
 
 const INIT = {
@@ -92,13 +93,19 @@ function Field({ name, label, value, onChange, options = [], rows = 1, readOnly 
       </div>
     );
   }
-  const type = isNum ? 'number' : 'text';
-  const handleFocus = isNum && !readOnly ? (e) => { if (Number(e.target.value) === 0) onChange(name, ''); } : undefined;
-  const handleBlur = isNum && !readOnly ? (e) => { if (e.target.value === '') onChange(name, 0); } : undefined;
+  // Editable numeric fields: live comma formatting
+  if (isNum) {
+    return (
+      <div className="space-y-1">
+        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
+        <NumericInput name={name} value={value} onChange={onChange} className={cls} />
+      </div>
+    );
+  }
   return (
     <div className="space-y-1">
       <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
-      <input type={type} value={value ?? ''} onChange={(e) => onChange(name, e.target.value)} onFocus={handleFocus} onBlur={handleBlur} readOnly={readOnly} className={cls} />
+      <input type="text" value={value ?? ''} onChange={(e) => onChange(name, e.target.value)} className={cls} />
     </div>
   );
 }
@@ -466,12 +473,10 @@ export default function ParcelMasterPage() {
             <div className="space-y-1">
               <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Purchase Price</label>
               <div className="flex">
-                <input
-                  type="number"
-                  value={form.purchase_price ?? ''}
-                  onChange={(e) => setValue('purchase_price', e.target.value === '' ? '' : Number(e.target.value))}
-                  onFocus={(e) => { if (Number(e.target.value) === 0) setValue('purchase_price', ''); }}
-                  onBlur={(e) => { if (e.target.value === '') setValue('purchase_price', 0); }}
+                <NumericInput
+                  name="purchase_price"
+                  value={form.purchase_price}
+                  onChange={setValue}
                   className="flex-1 min-w-0 px-3 py-2 text-sm border border-r-0 border-gray-300 rounded-l-md focus:ring-1 focus:ring-blue-500 outline-none"
                 />
                 <select
