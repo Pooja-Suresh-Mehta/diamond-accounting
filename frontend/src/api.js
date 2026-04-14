@@ -2,6 +2,7 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: '/api',
+  timeout: 30000, // 30s — surface errors instead of hanging indefinitely
 });
 
 // Attach token to every request
