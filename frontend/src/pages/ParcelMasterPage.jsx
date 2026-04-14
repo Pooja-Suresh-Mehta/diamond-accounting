@@ -5,6 +5,7 @@ import { Plus, Save, Pencil, Trash2 } from 'lucide-react';
 import api from '../api';
 import ListPageControls from '../components/ListPageControls';
 import CreatableField from '../components/CreatableField';
+import MergeDialog from '../components/MergeDialog';
 
 const INIT = {
   lot_no: '',
@@ -89,6 +90,7 @@ export default function ParcelMasterPage() {
   const [askingCurrency, setAskingCurrency] = useState('INR');
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(INIT);
+  const [mergeState, setMergeState] = useState(null); // { existing, mergedPreview, payload }
   const [opts, setOpts] = useState({
     shapes: [], colors: [], clarities: [], sizes: [], sieves: [], group_ids: [],
     stock_types: ['Natural Diamond', 'Gem Stone'], stock_subtypes: ['Polished', 'Makeable'], grown_process_types: ['Natural'],
@@ -181,15 +183,50 @@ export default function ParcelMasterPage() {
     try {
       const payload = { ...form };
       for (const f of numericFields) payload[f] = payload[f] === '' ? 0 : Number(payload[f]);
-      if (isEditMode) await api.put(`/parcel-master/${id}`, payload);
-      else await api.post('/parcel-master', payload);
-      toast.success(isEditMode ? 'Updated' : 'Created');
+
+      if (isEditMode) {
+        await api.put(`/parcel-master/${id}`, payload);
+        toast.success('Updated');
+        navigate('/parcel-master', { replace: true });
+        return;
+      }
+
+      // Check for similar entries before creating
+      const { data: similarData } = await api.post('/parcel-master/check-similar', payload);
+      if (similarData?.existing) {
+        setMergeState({ existing: similarData.existing, mergedPreview: similarData.merged_preview, payload });
+        return;
+      }
+
+      await api.post('/parcel-master', payload);
+      toast.success('Created');
       navigate('/parcel-master', { replace: true });
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Save failed');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleMerge = async () => {
+    if (!mergeState) return;
+    setSaving(true);
+    try {
+      await api.post(`/parcel-master/merge/${mergeState.existing.id}`, mergeState.payload);
+      toast.success('Merged with existing entry');
+      setMergeState(null);
+      navigate('/parcel-master', { replace: true });
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Merge failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDiscard = () => {
+    setMergeState(null);
+    toast('New entry discarded', { icon: '🗑️' });
+    navigate('/parcel-master', { replace: true });
   };
 
   const removeRow = async (rowId) => {
@@ -280,6 +317,15 @@ export default function ParcelMasterPage() {
 
   return (
     <div className="space-y-4">
+      {mergeState && (
+        <MergeDialog
+          existing={mergeState.existing}
+          newEntry={mergeState.payload}
+          mergedPreview={mergeState.mergedPreview}
+          onMerge={handleMerge}
+          onDiscard={handleDiscard}
+        />
+      )}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Parcel Master / {isEditMode ? 'Edit Parcel Item' : 'Add Parcel Item Master'}</h1>
         <div className="flex gap-2">
