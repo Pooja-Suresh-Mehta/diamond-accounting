@@ -36,6 +36,13 @@ if _is_sqlite:
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.execute("PRAGMA busy_timeout=30000")
+        # Reduce USB I/O pressure — keep more data in memory before
+        # flushing to disk, avoiding I/O bursts that can cause USB
+        # controllers to timeout and disconnect the drive.
+        cursor.execute("PRAGMA cache_size=-8000")       # 8 MB page cache (default ~2 MB)
+        cursor.execute("PRAGMA wal_autocheckpoint=500") # checkpoint every 500 pages instead of 1000 writes
+        cursor.execute("PRAGMA temp_store=MEMORY")      # temp tables in RAM, not on USB
+        cursor.execute("PRAGMA mmap_size=0")            # disable mmap — unsafe on removable media
         cursor.close()
 
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
