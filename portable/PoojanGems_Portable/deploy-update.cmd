@@ -82,18 +82,30 @@ if exist "%OLD_DIR%\data" (
 )
 echo.
 
+REM -- Step 5b: Run cleanup in OLD folder to remove cache before copying python --
+if exist "%OLD_DIR%\cleanup.bat" (
+    echo [5b/7] Cleaning up old Python folder for faster copy...
+    cd /d "%OLD_DIR%"
+    call cleanup.bat >nul 2>&1
+    cd /d "%~dp0"
+    echo [OK] Cleanup complete.
+) else (
+    echo [5b/7] No cleanup.bat found. Skipping cleanup.
+)
+echo.
+
 REM -- Step 6: Copy python folder from OLD --
 if exist "%OLD_DIR%\python" (
-    echo [5/7] Copying embedded Python from old installation...
+    echo [6/7] Copying embedded Python from old installation...
     xcopy /s /e /y /q "%OLD_DIR%\python\*" "%APP_DIR%\python\" >nul
     echo [OK] Python copied.
 ) else (
-    echo [5/7] No old python folder found. Skipping.
+    echo [6/7] No old python folder found. Skipping.
 )
 echo.
 
 REM -- Step 7: Delete OLD folder --
-echo [6/7] Deleting old installation...
+echo [7/7] Deleting old installation...
 rmdir /s /q "%OLD_DIR%"
 if exist "%OLD_DIR%" (
     echo [WARN] Could not fully delete %OLD_DIR%. You can manually remove it later.
@@ -107,12 +119,12 @@ del /q "%ZIP_DEST%" >nul 2>&1
 
 REM -- Step 9: Run build-exe.bat --
 if exist "%APP_DIR%\build-exe.bat" (
-    echo [7/7] Running build-exe.bat...
+    echo [8/8] Running build-exe.bat...
     echo.
     cd /d "%APP_DIR%"
     call build-exe.bat
 ) else (
-    echo [7/7] build-exe.bat not found in %APP_DIR%. Skipping.
+    echo [8/8] build-exe.bat not found in %APP_DIR%. Skipping.
 )
 
 echo.
