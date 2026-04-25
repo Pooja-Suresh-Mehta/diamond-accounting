@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Plus, Save, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Save, Pencil, Trash2, GitMerge, RotateCcw } from 'lucide-react';
 import api from '../api';
 import ListPageControls from '../components/ListPageControls';
 import CreatableField from '../components/CreatableField';
@@ -44,7 +44,6 @@ const numericFields = new Set([
   'asking_price_inr_carats', 'asking_inr_amount',
 ]);
 
-// Hardcoded shape → stock group mapping (fallback before API loads)
 const SHAPE_STOCKGROUP_DEFAULTS = {
   'baguette': 'TPBG', 'tapper': 'TPBG',
   'pear': 'PMQ', 'marquise': 'PMQ',
@@ -53,13 +52,9 @@ const SHAPE_STOCKGROUP_DEFAULTS = {
   'oval': 'OFS', 'princess': 'OFS', 'radiant': 'OFS', 'triangle': 'OFS',
 };
 
-// Hardcoded size → sieve mapping (fixed, not editable)
-const SIZE_SIEVE_MAP = {
-  '0.18 UP': '1/5',
-  '0.23 UP': '1/4',
-  '0.30 UP': '1/3',
-  '0.40 UP': '3/8',
-  '0.50 UP': '1/2',
+const SIZE_SIEVE_DEFAULTS = {
+  '0.18 UP': '1/5', '0.23 UP': '1/4', '0.30 UP': '1/3',
+  '0.40 UP': '3/8', '0.50 UP': '1/2',
 };
 
 function Field({ name, label, value, onChange, options = [], rows = 1, readOnly = false }) {
@@ -84,7 +79,6 @@ function Field({ name, label, value, onChange, options = [], rows = 1, readOnly 
     );
   }
   const isNum = numericFields.has(name);
-  // Readonly numeric fields: show comma-formatted value as text
   if (isNum && readOnly) {
     return (
       <div className="space-y-1">
@@ -93,7 +87,6 @@ function Field({ name, label, value, onChange, options = [], rows = 1, readOnly 
       </div>
     );
   }
-  // Editable numeric fields: live comma formatting
   if (isNum) {
     return (
       <div className="space-y-1">
@@ -125,17 +118,25 @@ export default function ParcelMasterPage() {
   const [askingCurrency, setAskingCurrency] = useState('INR');
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(INIT);
-  const [mergeState, setMergeState] = useState(null); // { existing, mergedPreview, payload }
-  const [shapeMap, setShapeMap] = useState(SHAPE_STOCKGROUP_DEFAULTS); // shape(lowercase) → stockgroup
-  const [shapeMappingModal, setShapeMappingModal] = useState(null); // { shape: string } | null
+  const [mergeState, setMergeState] = useState(null); // { existing, mergedPreview, payload, isEditMerge }
+  const [shapeMap, setShapeMap] = useState(SHAPE_STOCKGROUP_DEFAULTS);
+  const [sizeSieveMap, setSizeSieveMap] = useState(SIZE_SIEVE_DEFAULTS);
+  const [shapeMappingModal, setShapeMappingModal] = useState(null);
   const [shapeMappingValue, setShapeMappingValue] = useState('');
   const [opts, setOpts] = useState({
     shapes: [], colors: [], clarities: [], sizes: [], sieves: [], group_ids: [],
     stock_types: ['Natural Diamond', 'Gem Stone'], stock_subtypes: ['Polished', 'Makeable'], grown_process_types: ['Natural'],
   });
 
+  // Merge log tab
+  const [activeTab, setActiveTab] = useState('list');
+  const [mergeLogs, setMergeLogs] = useState([]);
+  const [loadingMergeLogs, setLoadingMergeLogs] = useState(false);
+
+  // ── Data loaders ───────────────────────────────────────
   const loadRows = async () => {
-    const res = await api.get('/parcel-master', { params: { search } });
+    // Pass page_size=500 so all records come back; client-side pagination handles the rest
+    const res = await api.get('/parcel-master', { params: { search, page_size: 500 } });
     setRows(Array.isArray(res.data) ? res.data : []);
     setPage(1);
   };
@@ -144,21 +145,18 @@ export default function ParcelMasterPage() {
     setOpts(res.data);
   };
   const loadShapeMap = async () => {
-    try {
-      const res = await api.get('/dropdown-options/shape-map');
-      setShapeMap(res.data);
-    } catch {}
+    try { const res = await api.get('/dropdown-options/shape-map'); setShapeMap(res.data); } catch {}
   };
-
-  const handleNewOption = (fieldKey, newVal) => {
-    const keyMap = { shape: 'shapes', color: 'colors', clarity: 'clarities', size: 'sizes', sieve: 'sieves', stock_group: 'group_ids' };
-    const optsKey = keyMap[fieldKey];
-    if (optsKey) setOpts((prev) => ({ ...prev, [optsKey]: [...(prev[optsKey] || []), newVal] }));
-    // For new shapes, prompt user for stock group mapping if not already known
-    if (fieldKey === 'shape' && !shapeMap[newVal.toLowerCase()]) {
-      setShapeMappingModal({ shape: newVal });
-      setShapeMappingValue('');
-    }
+  const loadSizeSieveMap = async () => {
+    try { const res = await api.get('/dropdown-options/size-sieve-map'); setSizeSieveMap(res.data); } catch {}
+  };
+  const loadMergeLogs = async () => {
+    setLoadingMergeLogs(true);
+    try {
+      const res = await api.get('/parcel-master/merge-log');
+      setMergeLogs(Array.isArray(res.data) ? res.data : []);
+    } catch { toast.error('Failed to load merge log'); }
+    finally { setLoadingMergeLogs(false); }
   };
   const loadEdit = async () => {
     if (!id) return;
@@ -166,9 +164,11 @@ export default function ParcelMasterPage() {
     setForm({ ...INIT, ...res.data });
   };
 
+  // ── Effects ────────────────────────────────────────────
   useEffect(() => {
     loadOpts().catch(() => toast.error('Failed to load parcel options'));
     loadShapeMap();
+    loadSizeSieveMap();
   }, []);
   useEffect(() => {
     if (!isFormMode) loadRows().catch(() => toast.error('Failed to load parcel list'));
@@ -196,16 +196,14 @@ export default function ParcelMasterPage() {
     const C = Number(form.usd_to_inr_rate || 0);
     const isINR = form.purchase_price_currency === 'INR';
     const isUSD = form.purchase_price_currency === 'USD';
-
-    const D = isINR ? A * B : A * B * C;                          // Purchase/Cost INR Amount
-    const E = isUSD ? A * B : (C !== 0 ? (A * B) / C : 0);       // Purchase/Cost USD Amount
-    const J = isINR ? B : B * C;                                   // Purchase/Cost INR/Carat
-    const K = isUSD ? B : (C !== 0 ? B / C : 0);                  // Purchase/Cost USD/Carat
-    const F = isINR ? B * 1.06 : B * 1.06 * C;                   // Asking Price INR/Carats
-    const G = isUSD ? B * 1.06 : (C !== 0 ? (B * 1.06) / C : 0); // Asking Price USD/Carats
-    const H = D * 1.06;                                            // Asking INR Amount
-    const I = E * 1.06;                                            // Asking USD Amount
-
+    const D = isINR ? A * B : A * B * C;
+    const E = isUSD ? A * B : (C !== 0 ? (A * B) / C : 0);
+    const J = isINR ? B : B * C;
+    const K = isUSD ? B : (C !== 0 ? B / C : 0);
+    const F = isINR ? B * 1.06 : B * 1.06 * C;
+    const G = isUSD ? B * 1.06 : (C !== 0 ? (B * 1.06) / C : 0);
+    const H = D * 1.06;
+    const I = E * 1.06;
     setForm((p) => ({
       ...p,
       purchase_cost_inr_amount: Number(D.toFixed(2)),
@@ -219,6 +217,17 @@ export default function ParcelMasterPage() {
     }));
   }, [form.opening_weight_carats, form.purchase_price, form.purchase_price_currency, form.usd_to_inr_rate, isFormMode]);
 
+  // ── Handlers ───────────────────────────────────────────
+  const handleNewOption = (fieldKey, newVal) => {
+    const keyMap = { shape: 'shapes', color: 'colors', clarity: 'clarities', size: 'sizes', sieve: 'sieves', stock_group: 'group_ids' };
+    const optsKey = keyMap[fieldKey];
+    if (optsKey) setOpts((prev) => ({ ...prev, [optsKey]: [...(prev[optsKey] || []), newVal] }));
+    if (fieldKey === 'shape' && !shapeMap[newVal.toLowerCase()]) {
+      setShapeMappingModal({ shape: newVal });
+      setShapeMappingValue('');
+    }
+  };
+
   const setValue = (name, value) => {
     if (numericFields.has(name)) {
       setForm((p) => ({ ...p, [name]: value === '' ? '' : Number(value) }));
@@ -230,7 +239,7 @@ export default function ParcelMasterPage() {
       return;
     }
     if (name === 'size') {
-      const sieve = SIZE_SIEVE_MAP[value];
+      const sieve = sizeSieveMap[value];
       setForm((p) => ({ ...p, size: value, ...(sieve !== undefined ? { sieve_mm: sieve } : {}) }));
       return;
     }
@@ -247,16 +256,22 @@ export default function ParcelMasterPage() {
       for (const f of numericFields) payload[f] = payload[f] === '' ? 0 : Number(payload[f]);
 
       if (isEditMode) {
+        // Check if edited values now match another entry
+        const { data: similarData } = await api.post(`/parcel-master/check-similar-edit/${id}`, payload);
+        if (similarData?.existing) {
+          setMergeState({ existing: similarData.existing, mergedPreview: similarData.merged_preview, payload, isEditMerge: true });
+          return;
+        }
         await api.put(`/parcel-master/${id}`, payload);
         toast.success('Updated');
         navigate('/parcel-master', { replace: true });
         return;
       }
 
-      // Check for similar entries before creating
+      // Add mode: check for similar entries
       const { data: similarData } = await api.post('/parcel-master/check-similar', payload);
       if (similarData?.existing) {
-        setMergeState({ existing: similarData.existing, mergedPreview: similarData.merged_preview, payload });
+        setMergeState({ existing: similarData.existing, mergedPreview: similarData.merged_preview, payload, isEditMerge: false });
         return;
       }
 
@@ -274,7 +289,8 @@ export default function ParcelMasterPage() {
     if (!mergeState) return;
     setSaving(true);
     try {
-      await api.post(`/parcel-master/merge/${mergeState.existing.id}`, mergeState.payload);
+      const params = mergeState.isEditMerge ? { source_parcel_id: id } : {};
+      await api.post(`/parcel-master/merge/${mergeState.existing.id}`, mergeState.payload, { params });
       toast.success('Merged with existing entry');
       setMergeState(null);
       navigate('/parcel-master', { replace: true });
@@ -286,31 +302,25 @@ export default function ParcelMasterPage() {
   };
 
   const handleDiscard = () => {
+    const wasEditMerge = mergeState?.isEditMerge;
     setMergeState(null);
-    toast('New entry discarded', { icon: '🗑️' });
-    navigate('/parcel-master', { replace: true });
+    if (wasEditMerge) {
+      toast('Merge cancelled — you can continue editing', { icon: 'ℹ️' });
+    } else {
+      toast('New entry discarded', { icon: '🗑️' });
+      navigate('/parcel-master', { replace: true });
+    }
   };
 
   const handleSaveShapeMapping = async () => {
-    if (!shapeMappingModal || !shapeMappingValue.trim()) {
-      setShapeMappingModal(null);
-      return;
-    }
+    if (!shapeMappingModal || !shapeMappingValue.trim()) { setShapeMappingModal(null); return; }
     try {
-      await api.post('/dropdown-options/shape-map', {
-        shape: shapeMappingModal.shape,
-        stock_group: shapeMappingValue.trim(),
-      });
-      const updated = { ...shapeMap, [shapeMappingModal.shape.toLowerCase()]: shapeMappingValue.trim() };
-      setShapeMap(updated);
+      await api.post('/dropdown-options/shape-map', { shape: shapeMappingModal.shape, stock_group: shapeMappingValue.trim() });
+      setShapeMap((p) => ({ ...p, [shapeMappingModal.shape.toLowerCase()]: shapeMappingValue.trim() }));
       setForm((p) => ({ ...p, stock_group_id: shapeMappingValue.trim() }));
       toast.success(`"${shapeMappingModal.shape}" mapped to ${shapeMappingValue.trim()}`);
-    } catch {
-      toast.error('Failed to save stock group mapping');
-    } finally {
-      setShapeMappingModal(null);
-      setShapeMappingValue('');
-    }
+    } catch { toast.error('Failed to save stock group mapping'); }
+    finally { setShapeMappingModal(null); setShapeMappingValue(''); }
   };
 
   const removeRow = async (rowId) => {
@@ -319,14 +329,24 @@ export default function ParcelMasterPage() {
       await api.delete(`/parcel-master/${rowId}`);
       toast.success('Deleted');
       await loadRows();
-    } catch {
-      toast.error('Delete failed');
-    }
+    } catch { toast.error('Delete failed'); }
   };
 
+  const handleUnmerge = async (logId, survivingLot, mergedLot) => {
+    if (!confirm(`Unmerge Lot#${mergedLot} from Lot#${survivingLot}? This restores the merged entry and subtracts its values.`)) return;
+    try {
+      await api.post(`/parcel-master/unmerge/${logId}`);
+      toast.success(`Unmerged: Lot#${mergedLot} restored`);
+      loadMergeLogs();
+      loadRows();
+    } catch (e) { toast.error(e?.response?.data?.detail || 'Unmerge failed'); }
+  };
+
+  // ── Pagination (client-side, all rows loaded from API) ─
   const tableRows = useMemo(() => rows.slice((page - 1) * rowLimit, (page - 1) * rowLimit + rowLimit), [rows, page, rowLimit]);
   const totalPages = Math.max(1, Math.ceil(rows.length / rowLimit));
 
+  // ── List view ──────────────────────────────────────────
   if (!isFormMode) {
     return (
       <div className="space-y-4">
@@ -336,69 +356,139 @@ export default function ParcelMasterPage() {
             <Plus className="w-4 h-4" /> Add Parcel Item
           </button>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-          <ListPageControls
-            search={search}
-            onSearchChange={setSearch}
-            rowLimit={rowLimit}
-            onRowLimitChange={(v) => { setRowLimit(v); setPage(1); }}
-            page={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            pageOptions={[100, 500, 1000, 1500]}
-          />
-          <div className="overflow-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-gray-600">
-                <tr>
-                  <th className="text-left px-3 py-2">Edit</th>
-                  <th className="text-left px-3 py-2">Delete</th>
-                  <th className="text-left px-3 py-2">LotNo</th>
-                  <th className="text-left px-3 py-2">ItemName</th>
-                  <th className="text-left px-3 py-2">Shape</th>
-                  <th className="text-left px-3 py-2">Color</th>
-                  <th className="text-left px-3 py-2">Size</th>
-                  <th className="text-left px-3 py-2">Cla</th>
-                  <th className="text-left px-3 py-2">Sieve</th>
-                  <th className="text-left px-3 py-2">Group</th>
-                  <th className="text-right px-3 py-2">Weight</th>
-                  <th className="text-right px-3 py-2">
-                    <div className="flex items-center justify-end gap-1">
-                      <span>P/Ct</span>
-                      <button
-                        onClick={() => setAskingCurrency(c => c === 'INR' ? 'USD' : 'INR')}
-                        className="px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
-                      >{askingCurrency}</button>
-                    </div>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {tableRows.map((r) => (
-                  <tr key={r.id} className="border-t border-gray-100">
-                    <td className="px-3 py-2"><button onClick={() => navigate(`/parcel-master/edit/${r.id}`)} className="text-blue-600"><Pencil className="w-4 h-4" /></button></td>
-                    <td className="px-3 py-2"><button onClick={() => removeRow(r.id)} className="text-red-600"><Trash2 className="w-4 h-4" /></button></td>
-                    <td className="px-3 py-2">{r.lot_no}</td>
-                    <td className="px-3 py-2">{r.item_name}</td>
-                    <td className="px-3 py-2">{r.shape}</td>
-                    <td className="px-3 py-2">{r.color}</td>
-                    <td className="px-3 py-2">{r.size}</td>
-                    <td className="px-3 py-2">{r.clarity}</td>
-                    <td className="px-3 py-2">{r.sieve_mm}</td>
-                    <td className="px-3 py-2">{r.stock_group_id}</td>
-                    <td className="px-3 py-2 text-right">{fmtAmt(r.opening_weight_carats || 0)}</td>
-                    <td className="px-3 py-2 text-right">{fmtAmt(askingCurrency === 'INR' ? r.asking_price_inr_carats : r.asking_price_usd_carats)}</td>
-                  </tr>
-                ))}
-                {tableRows.length === 0 && <tr><td colSpan={12} className="text-center px-3 py-5 text-gray-500">No records found</td></tr>}
-              </tbody>
-            </table>
-          </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 border-b border-gray-200">
+          <button
+            onClick={() => setActiveTab('list')}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${activeTab === 'list' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            Parcel List
+          </button>
+          <button
+            onClick={() => { setActiveTab('merge-log'); loadMergeLogs(); }}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors flex items-center gap-1.5 ${activeTab === 'merge-log' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            <GitMerge className="w-3.5 h-3.5" /> Merge Log
+          </button>
         </div>
+
+        {activeTab === 'list' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <ListPageControls
+              search={search}
+              onSearchChange={setSearch}
+              rowLimit={rowLimit}
+              onRowLimitChange={(v) => { setRowLimit(v); setPage(1); }}
+              page={page}
+              totalPages={totalPages}
+              onPageChange={setPage}
+              pageOptions={[100, 500, 1000, 1500]}
+            />
+            <div className="overflow-auto">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50 text-gray-600">
+                  <tr>
+                    <th className="text-left px-3 py-2">Edit</th>
+                    <th className="text-left px-3 py-2">Delete</th>
+                    <th className="text-left px-3 py-2">LotNo</th>
+                    <th className="text-left px-3 py-2">ItemName</th>
+                    <th className="text-left px-3 py-2">Shape</th>
+                    <th className="text-left px-3 py-2">Color</th>
+                    <th className="text-left px-3 py-2">Size</th>
+                    <th className="text-left px-3 py-2">Cla</th>
+                    <th className="text-left px-3 py-2">Sieve</th>
+                    <th className="text-left px-3 py-2">Group</th>
+                    <th className="text-right px-3 py-2">Weight</th>
+                    <th className="text-right px-3 py-2">
+                      <div className="flex items-center justify-end gap-1">
+                        <span>P/Ct</span>
+                        <button
+                          onClick={() => setAskingCurrency(c => c === 'INR' ? 'USD' : 'INR')}
+                          className="px-1.5 py-0.5 text-xs font-semibold rounded bg-blue-100 text-blue-700 hover:bg-blue-200"
+                        >{askingCurrency}</button>
+                      </div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableRows.map((r) => (
+                    <tr key={r.id} className="border-t border-gray-100">
+                      <td className="px-3 py-2"><button onClick={() => navigate(`/parcel-master/edit/${r.id}`)} className="text-blue-600"><Pencil className="w-4 h-4" /></button></td>
+                      <td className="px-3 py-2"><button onClick={() => removeRow(r.id)} className="text-red-600"><Trash2 className="w-4 h-4" /></button></td>
+                      <td className="px-3 py-2">{r.lot_no}</td>
+                      <td className="px-3 py-2">{r.item_name}</td>
+                      <td className="px-3 py-2">{r.shape}</td>
+                      <td className="px-3 py-2">{r.color}</td>
+                      <td className="px-3 py-2">{r.size}</td>
+                      <td className="px-3 py-2">{r.clarity}</td>
+                      <td className="px-3 py-2">{r.sieve_mm}</td>
+                      <td className="px-3 py-2">{r.stock_group_id}</td>
+                      <td className="px-3 py-2 text-right">{fmtAmt(r.opening_weight_carats || 0)}</td>
+                      <td className="px-3 py-2 text-right">{fmtAmt(askingCurrency === 'INR' ? r.asking_price_inr_carats : r.asking_price_usd_carats)}</td>
+                    </tr>
+                  ))}
+                  {tableRows.length === 0 && <tr><td colSpan={12} className="text-center px-3 py-5 text-gray-500">No records found</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'merge-log' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <p className="text-sm text-gray-500 mb-3">All past merges. Use Unmerge to undo an incorrect merge — the absorbed entry will be restored with its original lot number.</p>
+            {loadingMergeLogs ? (
+              <div className="py-10 text-center text-gray-400 text-sm">Loading...</div>
+            ) : (
+              <div className="overflow-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50 text-gray-600">
+                    <tr>
+                      <th className="text-left px-3 py-2">Unmerge</th>
+                      <th className="text-left px-3 py-2">Surviving Lot</th>
+                      <th className="text-left px-3 py-2">Merged Lot</th>
+                      <th className="text-right px-3 py-2">Merged Weight</th>
+                      <th className="text-right px-3 py-2">Merged Cost INR</th>
+                      <th className="text-right px-3 py-2">Merged Cost USD</th>
+                      <th className="text-left px-3 py-2">Merged By</th>
+                      <th className="text-left px-3 py-2">Merged At</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mergeLogs.map((log) => (
+                      <tr key={log.id} className="border-t border-gray-100">
+                        <td className="px-3 py-2">
+                          <button
+                            onClick={() => handleUnmerge(log.id, log.surviving_lot_no, log.merged_lot_no)}
+                            className="flex items-center gap-1 text-amber-600 hover:text-amber-700 text-xs font-medium"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" /> Unmerge
+                          </button>
+                        </td>
+                        <td className="px-3 py-2 font-medium">{log.surviving_lot_no}</td>
+                        <td className="px-3 py-2 text-blue-700">{log.merged_lot_no}</td>
+                        <td className="px-3 py-2 text-right">{fmtAmt(log.merged_weight)}</td>
+                        <td className="px-3 py-2 text-right">{fmtAmt(log.merged_purchase_cost_inr)}</td>
+                        <td className="px-3 py-2 text-right">{fmtAmt(log.merged_purchase_cost_usd)}</td>
+                        <td className="px-3 py-2 text-gray-500">{log.merged_by_name || '—'}</td>
+                        <td className="px-3 py-2 text-gray-500">{new Date(log.merged_at).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                    {mergeLogs.length === 0 && (
+                      <tr><td colSpan={8} className="text-center px-3 py-8 text-gray-400">No merge history</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
 
+  // ── Form view (Add / Edit) ─────────────────────────────
   return (
     <div className="space-y-4">
       {mergeState && (
@@ -408,6 +498,7 @@ export default function ParcelMasterPage() {
           mergedPreview={mergeState.mergedPreview}
           onMerge={handleMerge}
           onDiscard={handleDiscard}
+          isEditMerge={mergeState.isEditMerge}
         />
       )}
       {shapeMappingModal && (
@@ -433,6 +524,8 @@ export default function ParcelMasterPage() {
           </div>
         </div>
       )}
+
+      {/* Header — single Submit button */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Parcel Master / {isEditMode ? 'Edit Parcel Item' : 'Add Parcel Item Master'}</h1>
         <div className="flex gap-2">

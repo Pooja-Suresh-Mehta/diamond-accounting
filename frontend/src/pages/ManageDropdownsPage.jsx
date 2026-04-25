@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Pencil, Trash2, Plus, X, Check, AlertTriangle } from 'lucide-react';
+import { Pencil, Trash2, Plus, X, Check, AlertTriangle, GitMerge } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api';
 
@@ -12,6 +12,62 @@ const FIELD_LABELS = {
   stock_group: 'Stock Group',
 };
 const FIELDS = Object.keys(FIELD_LABELS);
+
+function PairingPanel({ title, subtitle, pairings, editingKey, editValue, onEditStart, onEditCancel, onEditSave, onValueChange, valueOptions, valueLabel }) {
+  return (
+    <div className="mt-6 bg-white rounded-xl border border-gray-200 shadow-sm">
+      <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100">
+        <GitMerge className="w-4 h-4 text-blue-600" />
+        <h2 className="text-base font-semibold text-gray-800">{title}</h2>
+        <span className="text-xs text-gray-400 ml-1">({subtitle})</span>
+      </div>
+      <div className="divide-y divide-gray-50">
+        {Object.entries(pairings).length === 0 && (
+          <div className="px-5 py-6 text-center text-gray-400 text-sm">No pairings configured</div>
+        )}
+        {Object.entries(pairings).map(([key, val]) => (
+          <div key={key} className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 group">
+            <span className="w-36 text-sm font-medium text-gray-800">{key}</span>
+            <span className="text-gray-400 text-xs">→</span>
+            {editingKey === key ? (
+              <>
+                <select
+                  autoFocus
+                  value={editValue}
+                  onChange={(e) => onValueChange(e.target.value)}
+                  className="flex-1 px-3 py-1.5 border border-blue-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select {valueLabel}...</option>
+                  {valueOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+                <button
+                  onClick={() => { if (!editValue) { onEditCancel(); return; } onEditSave(key, editValue); }}
+                  className="p-1.5 text-green-600 hover:bg-green-50 rounded"
+                >
+                  <Check className="w-4 h-4" />
+                </button>
+                <button onClick={onEditCancel} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded">
+                  <X className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="flex-1 text-sm text-gray-700">{val || <span className="text-gray-400 italic">not set</span>}</span>
+                <button
+                  onClick={() => onEditStart(key, val || '')}
+                  className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Edit pairing"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function ManageDropdownsPage() {
   const [activeField, setActiveField] = useState('shape');
@@ -30,6 +86,13 @@ export default function ManageDropdownsPage() {
   // Usage dialog
   const [usageInfo, setUsageInfo] = useState(null);
 
+  // Shape→Stock Group pairing
+  const [shapeMap, setShapeMap] = useState({});
+  // Size→Sieve pairing
+  const [sizeSieveMap, setSizeSieveMap] = useState({});
+  const [editingPairing, setEditingPairing] = useState(null); // key being edited
+  const [pairingEditValue, setPairingEditValue] = useState('');
+
   const fetchAll = async () => {
     try {
       const res = await api.get('/dropdown-options/all');
@@ -41,7 +104,21 @@ export default function ManageDropdownsPage() {
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  const fetchShapeMap = async () => {
+    try {
+      const res = await api.get('/dropdown-options/shape-map');
+      setShapeMap(res.data || {});
+    } catch {}
+  };
+
+  const fetchSizeSieveMap = async () => {
+    try {
+      const res = await api.get('/dropdown-options/size-sieve-map');
+      setSizeSieveMap(res.data || {});
+    } catch {}
+  };
+
+  useEffect(() => { fetchAll(); fetchShapeMap(); fetchSizeSieveMap(); }, []);
 
   const values = allOptions[activeField] || [];
 
@@ -236,6 +313,54 @@ export default function ManageDropdownsPage() {
           </div>
         </div>
       </div>
+
+      {/* Shape → Stock Group pairing panel */}
+      {activeField === 'shape' && (
+        <PairingPanel
+          title="Shape → Stock Group Pairings"
+          subtitle="edit how each shape auto-fills the stock group"
+          pairings={shapeMap}
+          editingKey={editingPairing}
+          editValue={pairingEditValue}
+          onEditStart={(key, val) => { setEditingPairing(key); setPairingEditValue(val); }}
+          onEditCancel={() => setEditingPairing(null)}
+          onEditSave={async (key, newVal) => {
+            try {
+              await api.post('/dropdown-options/shape-map', { shape: key, stock_group: newVal });
+              toast.success(`"${key}" → "${newVal}" saved`);
+              setShapeMap((p) => ({ ...p, [key]: newVal }));
+            } catch { toast.error('Failed to save pairing'); }
+            setEditingPairing(null);
+          }}
+          onValueChange={setPairingEditValue}
+          valueOptions={allOptions['stock_group'] || []}
+          valueLabel="Stock Group"
+        />
+      )}
+
+      {/* Size → Sieve pairing panel */}
+      {(activeField === 'size' || activeField === 'sieve') && (
+        <PairingPanel
+          title="Size → Sieve Pairings"
+          subtitle="edit how each size auto-fills the sieve/mm"
+          pairings={sizeSieveMap}
+          editingKey={editingPairing}
+          editValue={pairingEditValue}
+          onEditStart={(key, val) => { setEditingPairing(key); setPairingEditValue(val); }}
+          onEditCancel={() => setEditingPairing(null)}
+          onEditSave={async (key, newVal) => {
+            try {
+              await api.post('/dropdown-options/size-sieve-map', { size: key, sieve: newVal });
+              toast.success(`"${key}" → "${newVal}" saved`);
+              setSizeSieveMap((p) => ({ ...p, [key]: newVal }));
+            } catch { toast.error('Failed to save pairing'); }
+            setEditingPairing(null);
+          }}
+          onValueChange={setPairingEditValue}
+          valueOptions={allOptions['sieve'] || []}
+          valueLabel="Sieve/MM"
+        />
+      )}
 
       {/* Usage dialog */}
       {usageInfo && (

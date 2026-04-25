@@ -62,6 +62,20 @@ const numericFields = new Set([
 ]);
 const itemNumericFields = new Set(['issue_carats', 'reje_pct', 'rejection', 'selected_carat', 'pcs', 'rate', 'usd_rate', 'less1', 'less2', 'less3', 'amount']);
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const isValidIsoDate = (value) => {
+  if (!DATE_RE.test(String(value || ''))) return false;
+  const dt = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(dt.getTime());
+};
+
+const addDaysToIsoDate = (value, days) => {
+  const dt = new Date(`${value}T00:00:00Z`);
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+};
+
 export default function PurchasePage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -144,10 +158,8 @@ export default function PurchasePage() {
       if (name === 'due_days' || name === 'date') {
         const d = name === 'date' ? value : next.date;
         const days = name === 'due_days' ? Number(value) : Number(next.due_days);
-        if (d && days >= 0) {
-          const dt = new Date(d);
-          dt.setDate(dt.getDate() + days);
-          next.due_date = dt.toISOString().slice(0, 10);
+        if (isValidIsoDate(d) && Number.isFinite(days) && days >= 0) {
+          next.due_date = addDaysToIsoDate(d, days);
         }
       }
       return next;

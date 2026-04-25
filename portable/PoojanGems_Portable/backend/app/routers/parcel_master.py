@@ -13,8 +13,11 @@ from app.constants import (
     DEFAULT_STOCK_GROUPS as STOCK_GROUP_IDS,
 )
 from app.database import get_db
-from app.models.models import DropdownOption, ParcelMaster, User
-from app.schemas import ParcelMasterCreate, ParcelMasterOut, ParcelMasterSimilarResponse, ParcelMasterUpdate
+from app.models.models import DropdownOption, ParcelMaster, ParcelMergeLog, User
+from app.schemas import (
+    ParcelMasterCreate, ParcelMasterOut, ParcelMasterSimilarResponse,
+    ParcelMasterUpdate, ParcelMergeLogOut,
+)
 
 router = APIRouter(prefix="/api/parcel-master", tags=["parcel-master"])
 
@@ -29,6 +32,8 @@ def _merge(defaults: list[str], custom: list[str]) -> list[str]:
             seen.add(key)
             result.append(v.strip())
     return result
+
+
 STOCK_TYPES = ["Natural Diamond", "Lab Grown Diamond", "Gem Stone"]
 STOCK_SUBTYPES = ["Polished", "Rough", "Makeable"]
 GROWN_PROCESS_TYPES = ["Natural", "HPHT", "CVD"]
@@ -55,7 +60,6 @@ async def get_parcel_options(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # Fetch all options for this company, respecting suppressions
     all_rows = (await db.execute(
         select(DropdownOption.field_name, DropdownOption.value, DropdownOption.is_suppressed)
         .where(DropdownOption.company_id == current_user.company_id)
@@ -90,7 +94,7 @@ async def get_parcel_options(
 async def list_parcels(
     search: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=50, ge=1, le=500),
+    page_size: int = Query(default=500, ge=1, le=5000),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -127,8 +131,15 @@ _SIMILARITY_FIELDS = [
 ]
 
 
+def _build_merge_description_line(existing: ParcelMaster, payload: ParcelMasterCreate) -> str:
+    currency = payload.purchase_price_currency or "USD"
+    weight = payload.opening_weight_carats or 0
+    price = payload.purchase_price or 0
+    lot = payload.lot_no or ""
+    return f"[Merged from Lot#{lot}: {weight}ct @ {price} {currency}/ct]"
+
+
 def _compute_merged_preview(existing: ParcelMaster, payload: ParcelMasterCreate) -> ParcelMasterOut:
-    """Return a ParcelMasterOut that represents what the merged entry would look like."""
     old_w = existing.opening_weight_carats or 0.0
     new_w = payload.opening_weight_carats or 0.0
     total_w = old_w + new_w
@@ -138,7 +149,6 @@ def _compute_merged_preview(existing: ParcelMaster, payload: ParcelMasterCreate)
     new_asking_inr = (existing.asking_inr_amount or 0) + (payload.asking_inr_amount or 0)
     new_asking_usd = (existing.asking_usd_amount or 0) + (payload.asking_usd_amount or 0)
 
-    # Weighted average purchase price
     avg_price = (
         ((existing.purchase_price or 0) * old_w + (payload.purchase_price or 0) * new_w) / total_w
         if total_w > 0 else (existing.purchase_price or 0)
@@ -200,7 +210,35 @@ async def check_similar_parcel(
             q = q.where(func.lower(col) == val)
         else:
             q = q.where((col == None) | (col == ""))  # noqa: E711
-    existing = (await db.execute(q)).scalar_one_or_none()
+    existing = (await db.execute(q)).scalars().first()
+    if not existing:
+        return ParcelMasterSimilarResponse(existing=None, merged_preview=None)
+    return ParcelMasterSimilarResponse(
+        existing=ParcelMasterOut.model_validate(existing),
+        merged_preview=_compute_merged_preview(existing, payload),
+    )
+
+
+@router.post("/check-similar-edit/{parcel_id}", response_model=ParcelMasterSimilarResponse)
+async def check_similar_for_edit(
+    parcel_id: str,
+    payload: ParcelMasterCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """After editing, check if the updated parcel now matches another existing parcel (exclude self)."""
+    q = select(ParcelMaster).where(
+        ParcelMaster.company_id == current_user.company_id,
+        ParcelMaster.id != parcel_id,
+    )
+    for field in _SIMILARITY_FIELDS:
+        val = (getattr(payload, field, None) or "").strip().lower()
+        col = getattr(ParcelMaster, field)
+        if val:
+            q = q.where(func.lower(col) == val)
+        else:
+            q = q.where((col == None) | (col == ""))  # noqa: E711
+    existing = (await db.execute(q)).scalars().first()
     if not existing:
         return ParcelMasterSimilarResponse(existing=None, merged_preview=None)
     return ParcelMasterSimilarResponse(
@@ -213,10 +251,11 @@ async def check_similar_parcel(
 async def merge_parcel(
     parcel_id: str,
     payload: ParcelMasterCreate,
+    source_parcel_id: str | None = Query(default=None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Merge the given new-entry payload into an existing parcel, combining weights and costs."""
+    """Merge payload into existing parcel. If source_parcel_id provided (edit-merge), delete it after."""
     row = (await db.execute(
         select(ParcelMaster).where(
             ParcelMaster.id == parcel_id,
@@ -226,7 +265,42 @@ async def merge_parcel(
     if not row:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parcel item not found")
 
+    source_row = None
+    if source_parcel_id:
+        source_row = (await db.execute(
+            select(ParcelMaster).where(
+                ParcelMaster.id == source_parcel_id,
+                ParcelMaster.company_id == current_user.company_id,
+            )
+        )).scalar_one_or_none()
+        if not source_row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source parcel not found")
+
     preview = _compute_merged_preview(row, payload)
+
+    # Append description line
+    desc_line = _build_merge_description_line(row, payload)
+    existing_desc = (row.description or "").strip()
+    row.description = (existing_desc + "\n" + desc_line).strip() if existing_desc else desc_line
+
+    # Create merge log
+    log = ParcelMergeLog(
+        company_id=current_user.company_id,
+        surviving_parcel_id=row.id,
+        surviving_lot_no=row.lot_no,
+        merged_lot_no=payload.lot_no,
+        merged_weight=payload.opening_weight_carats or 0,
+        merged_purchase_cost_inr=payload.purchase_cost_inr_amount or 0,
+        merged_purchase_cost_usd=payload.purchase_cost_usd_amount or 0,
+        merged_asking_inr=payload.asking_inr_amount or 0,
+        merged_asking_usd=payload.asking_usd_amount or 0,
+        merged_purchase_price=payload.purchase_price or 0,
+        merged_purchase_price_currency=payload.purchase_price_currency or "USD",
+        merged_by_name=_actor_name(current_user),
+    )
+    db.add(log)
+
+    # Apply merged values
     row.opening_weight_carats = preview.opening_weight_carats
     row.purchase_price = preview.purchase_price
     row.purchase_cost_inr_amount = preview.purchase_cost_inr_amount
@@ -238,9 +312,132 @@ async def merge_parcel(
     row.asking_price_inr_carats = preview.asking_price_inr_carats
     row.asking_price_usd_carats = preview.asking_price_usd_carats
 
+    if source_row:
+        await db.delete(source_row)
+
     await db.commit()
     await db.refresh(row)
     return ParcelMasterOut.model_validate(row)
+
+
+@router.get("/merge-log", response_model=list[ParcelMergeLogOut])
+async def list_merge_logs(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = (await db.execute(
+        select(ParcelMergeLog)
+        .where(ParcelMergeLog.company_id == current_user.company_id)
+        .order_by(ParcelMergeLog.merged_at.desc())
+    )).scalars().all()
+    return [ParcelMergeLogOut.model_validate(r) for r in rows]
+
+
+@router.post("/unmerge/{log_id}", response_model=ParcelMasterOut)
+async def unmerge_parcel(
+    log_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Undo a merge: restore the absorbed parcel and subtract its values from the surviving one."""
+    log = (await db.execute(
+        select(ParcelMergeLog).where(
+            ParcelMergeLog.id == log_id,
+            ParcelMergeLog.company_id == current_user.company_id,
+        )
+    )).scalar_one_or_none()
+    if not log:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Merge log entry not found")
+
+    surviving = (await db.execute(
+        select(ParcelMaster).where(
+            ParcelMaster.id == log.surviving_parcel_id,
+            ParcelMaster.company_id == current_user.company_id,
+        )
+    )).scalar_one_or_none()
+    if not surviving:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Surviving parcel no longer exists")
+
+    # Check lot uniqueness before restoring
+    existing_lot = (await db.execute(
+        select(ParcelMaster.id).where(
+            ParcelMaster.company_id == current_user.company_id,
+            func.lower(ParcelMaster.lot_no) == log.merged_lot_no.strip().lower(),
+        )
+    )).scalar_one_or_none()
+    if existing_lot:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Cannot restore merged lot '{log.merged_lot_no}' — a parcel with that lot number already exists.",
+        )
+
+    # Subtract merged values from surviving
+    old_total_w = surviving.opening_weight_carats or 0
+    merged_w = log.merged_weight or 0
+    new_w = max(0.0, old_total_w - merged_w)
+
+    surviving.opening_weight_carats = round(new_w, 4)
+    surviving.purchase_cost_inr_amount = round(max(0.0, (surviving.purchase_cost_inr_amount or 0) - (log.merged_purchase_cost_inr or 0)), 2)
+    surviving.purchase_cost_usd_amount = round(max(0.0, (surviving.purchase_cost_usd_amount or 0) - (log.merged_purchase_cost_usd or 0)), 2)
+    surviving.asking_inr_amount = round(max(0.0, (surviving.asking_inr_amount or 0) - (log.merged_asking_inr or 0)), 2)
+    surviving.asking_usd_amount = round(max(0.0, (surviving.asking_usd_amount or 0) - (log.merged_asking_usd or 0)), 2)
+
+    if new_w > 0:
+        surviving.purchase_cost_inr_carat = round(surviving.purchase_cost_inr_amount / new_w, 2)
+        surviving.purchase_cost_usd_carat = round(surviving.purchase_cost_usd_amount / new_w, 2)
+        surviving.asking_price_inr_carats = round(surviving.asking_inr_amount / new_w, 2)
+        surviving.asking_price_usd_carats = round(surviving.asking_usd_amount / new_w, 2)
+        old_price = surviving.purchase_price or 0
+        merged_price = log.merged_purchase_price or 0
+        surviving.purchase_price = round(
+            ((old_price * old_total_w) - (merged_price * merged_w)) / new_w, 2
+        )
+    else:
+        surviving.purchase_cost_inr_carat = 0
+        surviving.purchase_cost_usd_carat = 0
+        surviving.asking_price_inr_carats = 0
+        surviving.asking_price_usd_carats = 0
+
+    # Remove the merge description line
+    merge_line_prefix = f"[Merged from Lot#{log.merged_lot_no}:"
+    if surviving.description:
+        lines = [ln for ln in surviving.description.split("\n") if not ln.strip().startswith(merge_line_prefix)]
+        surviving.description = "\n".join(lines).strip() or None
+
+    # Restore the absorbed parcel
+    restored = ParcelMaster(
+        company_id=current_user.company_id,
+        lot_no=log.merged_lot_no,
+        item_name=surviving.item_name,
+        shape=surviving.shape,
+        color=surviving.color,
+        clarity=surviving.clarity,
+        size=surviving.size,
+        sieve_mm=surviving.sieve_mm,
+        stock_group_id=surviving.stock_group_id,
+        stock_type=surviving.stock_type,
+        stock_subtype=surviving.stock_subtype,
+        grown_process_type=surviving.grown_process_type,
+        opening_weight_carats=round(merged_w, 4),
+        purchase_price=round(log.merged_purchase_price or 0, 2),
+        purchase_price_currency=log.merged_purchase_price_currency or "USD",
+        purchase_cost_inr_amount=round(log.merged_purchase_cost_inr or 0, 2),
+        purchase_cost_usd_amount=round(log.merged_purchase_cost_usd or 0, 2),
+        purchase_cost_inr_carat=round((log.merged_purchase_cost_inr or 0) / merged_w, 2) if merged_w > 0 else 0,
+        purchase_cost_usd_carat=round((log.merged_purchase_cost_usd or 0) / merged_w, 2) if merged_w > 0 else 0,
+        asking_inr_amount=round(log.merged_asking_inr or 0, 2),
+        asking_usd_amount=round(log.merged_asking_usd or 0, 2),
+        asking_price_inr_carats=round((log.merged_asking_inr or 0) / merged_w, 2) if merged_w > 0 else 0,
+        asking_price_usd_carats=round((log.merged_asking_usd or 0) / merged_w, 2) if merged_w > 0 else 0,
+        description=f"[Restored via unmerge from Lot#{log.surviving_lot_no}]",
+        created_by_name=_actor_name(current_user),
+    )
+    db.add(restored)
+    await db.delete(log)
+
+    await db.commit()
+    await db.refresh(surviving)
+    return ParcelMasterOut.model_validate(surviving)
 
 
 @router.get("/{parcel_id}", response_model=ParcelMasterOut)

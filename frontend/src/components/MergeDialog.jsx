@@ -37,7 +37,7 @@ function NoteTag({ note, inr, usd }) {
   return null;
 }
 
-export default function MergeDialog({ existing, newEntry, mergedPreview, onMerge, onDiscard }) {
+export default function MergeDialog({ existing, newEntry, mergedPreview, onMerge, onDiscard, isEditMerge = false }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
@@ -49,11 +49,19 @@ export default function MergeDialog({ existing, newEntry, mergedPreview, onMerge
           </div>
           <div>
             <h2 className="text-lg font-bold text-gray-800">Similar Entry Found</h2>
-            <p className="text-sm text-gray-500 mt-0.5">
-              An existing parcel matches all classification fields of the entry you're adding.
-              You can <span className="font-medium text-orange-700">merge</span> the values or{' '}
-              <span className="font-medium text-gray-600">discard</span> your new entry.
-            </p>
+            {isEditMerge ? (
+              <p className="text-sm text-gray-500 mt-0.5">
+                After editing, this parcel now matches all classification fields of an existing entry (<span className="font-medium text-gray-700">{existing.lot_no}</span>).
+                You can <span className="font-medium text-orange-700">merge</span> them (the edited entry will be deleted and absorbed) or{' '}
+                <span className="font-medium text-gray-600">cancel</span> and go back to editing.
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500 mt-0.5">
+                An existing parcel matches all classification fields of the entry you're adding.
+                You can <span className="font-medium text-orange-700">merge</span> the values or{' '}
+                <span className="font-medium text-gray-600">discard</span> your new entry.
+              </p>
+            )}
           </div>
         </div>
 
@@ -126,7 +134,7 @@ export default function MergeDialog({ existing, newEntry, mergedPreview, onMerge
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
           >
             <XCircle className="w-4 h-4" />
-            Discard New Entry
+            {isEditMerge ? 'Cancel' : 'Discard New Entry'}
           </button>
           <button
             onClick={onMerge}

@@ -385,6 +385,34 @@ class ParcelMaster(Base):
     )
 
 
+class ParcelMergeLog(Base):
+    """Log of every merge that has been performed, enabling unmerge."""
+    __tablename__ = "parcel_merge_logs"
+
+    id = Column(String(36), primary_key=True, default=new_uuid)
+    company_id = Column(String(36), ForeignKey("companies.id"), nullable=False, index=True)
+
+    # The parcel that survived the merge (absorbed the other entry)
+    surviving_parcel_id = Column(String(36), nullable=False, index=True)
+    surviving_lot_no = Column(String(100), nullable=False)
+
+    # The parcel that was absorbed (deleted after merge)
+    merged_lot_no = Column(String(100), nullable=False)
+
+    # Values that were contributed by the merged entry (for unmerge subtraction)
+    merged_weight = Column(Float, default=0)
+    merged_purchase_cost_inr = Column(Float, default=0)
+    merged_purchase_cost_usd = Column(Float, default=0)
+    merged_asking_inr = Column(Float, default=0)
+    merged_asking_usd = Column(Float, default=0)
+    # Weighted purchase price of the merged entry (for unmerge recalculation)
+    merged_purchase_price = Column(Float, default=0)
+    merged_purchase_price_currency = Column(String(3), default="USD")
+
+    merged_by_name = Column(String(100))
+    merged_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 class ParcelPurchase(Base):
     __tablename__ = "parcel_purchases"
 

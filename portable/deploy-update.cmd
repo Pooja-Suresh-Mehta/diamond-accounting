@@ -12,7 +12,7 @@ set "DRIVE=D:"
 set "APP_NAME=PoojanGems_Portable"
 set "APP_DIR=%DRIVE%\%APP_NAME%"
 set "OLD_DIR=%DRIVE%\%APP_NAME%OLD"
-set "ZIP_SRC=C:\%APP_NAME%.zip"
+set "ZIP_SRC=D:\%APP_NAME%.zip"
 set "ZIP_DEST=%DRIVE%\%APP_NAME%.zip"
 
 REM -- Step 0: Verify the zip exists --
@@ -46,15 +46,15 @@ if exist "%APP_DIR%" (
 )
 echo.
 
-REM -- Step 3: Copy zip to D:\ --
-echo [2/7] Copying %ZIP_SRC% to %DRIVE%\...
-copy /y "%ZIP_SRC%" "%ZIP_DEST%" >nul
-if !errorlevel! neq 0 (
-    echo [ERROR] Copy failed.
-    goto fail
-)
-echo [OK] Zip copied.
-echo.
+@REM REM -- Step 3: Copy zip to D:\ --
+@REM echo [2/7] Copying %ZIP_SRC% to %DRIVE%\...
+@REM copy /y "%ZIP_SRC%" "%ZIP_DEST%" >nul
+@REM if !errorlevel! neq 0 (
+@REM     echo [ERROR] Copy failed.
+@REM     goto fail
+@REM )
+@REM echo [OK] Zip copied.
+@REM echo.
 
 REM -- Step 4: Extract zip --
 echo [3/7] Extracting %ZIP_DEST%...
@@ -84,28 +84,28 @@ echo.
 
 REM -- Step 5b: Run cleanup in OLD folder to remove cache before copying python --
 if exist "%OLD_DIR%\cleanup.bat" (
-    echo [5b/7] Cleaning up old Python folder for faster copy...
+    echo [5/8] Cleaning up old Python folder for faster copy...
     cd /d "%OLD_DIR%"
     call cleanup.bat >nul 2>&1
     cd /d "%~dp0"
     echo [OK] Cleanup complete.
 ) else (
-    echo [5b/7] No cleanup.bat found. Skipping cleanup.
+    echo [5/8] No cleanup.bat found. Skipping cleanup.
 )
 echo.
 
 REM -- Step 6: Copy python folder from OLD --
 if exist "%OLD_DIR%\python" (
-    echo [6/7] Copying embedded Python from old installation...
+    echo [6/8] Copying embedded Python from old installation...
     xcopy /s /e /y /q "%OLD_DIR%\python\*" "%APP_DIR%\python\" >nul
     echo [OK] Python copied.
 ) else (
-    echo [6/7] No old python folder found. Skipping.
+    echo [6/8] No old python folder found. Skipping.
 )
 echo.
 
 REM -- Step 7: Delete OLD folder --
-echo [7/7] Deleting old installation...
+echo [7/8] Deleting old installation...
 rmdir /s /q "%OLD_DIR%"
 if exist "%OLD_DIR%" (
     echo [WARN] Could not fully delete %OLD_DIR%. You can manually remove it later.

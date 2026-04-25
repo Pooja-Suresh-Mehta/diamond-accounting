@@ -122,6 +122,70 @@ async def add_shape_map(
     return {"ok": True, "shape": shape, "stock_group": stock_group}
 
 
+_HARDCODED_SIZE_SIEVE_MAP: dict[str, str] = {
+    "0.18 UP": "1/5",
+    "0.23 UP": "1/4",
+    "0.30 UP": "1/3",
+    "0.40 UP": "3/8",
+    "0.50 UP": "1/2",
+}
+
+
+@router.get("/size-sieve-map")
+async def get_size_sieve_map(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return size→sieve mapping (hardcoded defaults merged with company custom)."""
+    rows = (await db.execute(
+        select(DropdownOption.value)
+        .where(
+            DropdownOption.company_id == current_user.company_id,
+            DropdownOption.field_name == "size_sieve_map",
+        )
+    )).scalars().all()
+    result: dict[str, str] = dict(_HARDCODED_SIZE_SIEVE_MAP)
+    for row in rows:
+        parts = row.split("::", 1)
+        if len(parts) == 2:
+            result[parts[0].strip()] = parts[1].strip()
+    return result
+
+
+@router.post("/size-sieve-map")
+async def add_size_sieve_map(
+    body: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Add or update a size→sieve mapping."""
+    size = (body.get("size") or "").strip()
+    sieve = (body.get("sieve") or "").strip()
+    if not size or not sieve:
+        raise HTTPException(status_code=400, detail="size and sieve are required")
+    new_value = f"{size}::{sieve}"
+    existing_rows = (await db.execute(
+        select(DropdownOption).where(
+            DropdownOption.company_id == current_user.company_id,
+            DropdownOption.field_name == "size_sieve_map",
+        )
+    )).scalars().all()
+    existing = next(
+        (r for r in existing_rows if r.value.split("::", 1)[0].strip().lower() == size.lower()),
+        None,
+    )
+    if existing:
+        existing.value = new_value
+    else:
+        db.add(DropdownOption(
+            company_id=current_user.company_id,
+            field_name="size_sieve_map",
+            value=new_value,
+        ))
+    await db.commit()
+    return {"ok": True, "size": size, "sieve": sieve}
+
+
 @router.get("/{field_name}")
 async def get_options(
     field_name: str,

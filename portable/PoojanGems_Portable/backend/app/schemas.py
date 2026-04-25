@@ -404,6 +404,25 @@ class ParcelMasterSimilarResponse(BaseModel):
     merged_preview: Optional["ParcelMasterOut"] = None
 
 
+class ParcelMergeLogOut(BaseModel):
+    id: str
+    surviving_parcel_id: str
+    surviving_lot_no: str
+    merged_lot_no: str
+    merged_weight: float = 0
+    merged_purchase_cost_inr: float = 0
+    merged_purchase_cost_usd: float = 0
+    merged_asking_inr: float = 0
+    merged_asking_usd: float = 0
+    merged_purchase_price: float = 0
+    merged_purchase_price_currency: str = "USD"
+    merged_by_name: Optional[str] = None
+    merged_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 # ── Parcel Purchase ─────────────────────────────────────
 
 class ParcelPurchaseItemBase(BaseModel):
