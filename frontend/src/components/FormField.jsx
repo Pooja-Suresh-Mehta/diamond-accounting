@@ -4,7 +4,7 @@ import { fmtAmt } from '../utils/format';
 
 export default function FormField({
   label, name, value, onChange, options = [], type = 'text',
-  searchable = false, readOnly = false, onAddNew,
+  searchable = false, readOnly = false, onAddNew, onBlur,
 }) {
   const cls = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none';
   const shouldSearch = options.length > 0 && (searchable || options.length > 10);
@@ -53,6 +53,7 @@ export default function FormField({
             type="text"
             value={value ?? ''}
             onChange={(e) => onChange(name, e.target.value)}
+            onBlur={onBlur ? (e) => onBlur(name, e.target.value) : undefined}
             readOnly={readOnly}
             className={cls}
           />

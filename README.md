@@ -34,11 +34,11 @@ npm run dev
 Visit http://localhost:5173
 
 **Login:**
-| Field    | Value              |
-|----------|--------------------|
-| Company  | Diamond Accounting |
-| Username | admin              |
-| Password | Poojan@2025        |
+| Field    | Value         |
+|----------|---------------|
+| Company  | FancyCarat    |
+| Username | admin         |
+| Password | Poojan@2025   |
 
 ---
 
@@ -123,6 +123,28 @@ Whenever you make code changes:
 | Password | Poojan@2025        |
 
 Change the admin password after first login via **Users** in the sidebar.
+
+---
+
+## Restore Database from Excel
+
+If you need to wipe the database and restore from a backup Excel file:
+
+```bash
+cd /Users/pooja.mehta/Projects/poojan_gems
+source backend/venv/bin/activate
+python3 restore_db_from_excel.py
+```
+
+The script restores from `backend/poojan_gems_backup_20260425_195217.xlsx` by default.
+To use a different file:
+```bash
+python3 restore_db_from_excel.py backend/your_backup.xlsx
+```
+
+After running, restart the backend. The script prints a sanity check of the last 3 parcel_master rows to confirm the restore succeeded.
+
+> **Note:** Delete any `.db-shm` / `.db-wal` files in `backend/` before starting the backend after a restore.
 
 ---
 

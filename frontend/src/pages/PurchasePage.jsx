@@ -95,6 +95,9 @@ export default function PurchasePage() {
   const [opts, setOpts] = useState({ types: ['LOCAL', 'External', 'Internal', 'Pend Sale', 'HOLD', 'LAB'], sub_types: ['Bank', 'Cash'], categories: [], currencies: ['USD', 'INR', 'AED'], currency_rates: {}, parties: [], brokers: [], payment_statuses: [], lot_numbers: [], lot_items: [], next_invoice_number: '1' });
   const [showImportModal, setShowImportModal] = useState(false);
   const [importedRows, setImportedRows] = useState([]);
+  const [showLotModal, setShowLotModal] = useState(false);
+  const [lotFilters, setLotFilters] = useState({});
+  const [masterOpts, setMasterOpts] = useState({ sizes: [], sieves: [] });
 
   const loadRows = async () => {
     const res = await api.get('/parcel/purchase', { params: { search } });
@@ -102,8 +105,12 @@ export default function PurchasePage() {
     setPage(1);
   };
   const loadOpts = async () => {
-    const res = await api.get('/parcel/purchase/options');
-    setOpts(res.data);
+    const [purchaseRes, masterRes] = await Promise.all([
+      api.get('/parcel/purchase/options'),
+      api.get('/parcel-master/options'),
+    ]);
+    setOpts(purchaseRes.data);
+    setMasterOpts({ sizes: masterRes.data.sizes || [], sieves: masterRes.data.sieves || [] });
   };
   const loadEdit = async () => {
     if (!id) return;
@@ -210,6 +217,7 @@ export default function PurchasePage() {
       return p;
     });
   };
+
   const addSubmittedLot = () => {
     if (!String(lotDraft.lot_number || '').trim()) return toast.error('Lot selection is required');
     if (Number(lotDraft.issue_carats || 0) <= 0 || Number(lotDraft.rate || 0) <= 0) return toast.error('Issue Carats and Rate are required');
@@ -387,6 +395,7 @@ export default function PurchasePage() {
   }
 
   return (
+    <>
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Purchases / Add PurchaseParcel</h1>
@@ -449,7 +458,17 @@ export default function PurchasePage() {
         <div className="border-t pt-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-semibold text-gray-700">Lot Number</h3>
-            <button onClick={() => window.open('/parcel-master/add', '_blank')} className="px-3 py-1.5 text-sm border border-blue-500 text-blue-600 rounded">Add Parcel Master</button>
+            <div className="flex gap-2">
+              <button onClick={() => {
+                const pre = {};
+                if (lotDraft.shape) pre.shape = lotDraft.shape;
+                if (lotDraft.color) pre.color = lotDraft.color;
+                if (lotDraft.clarity) pre.clarity = lotDraft.clarity;
+                setLotFilters(pre);
+                setShowLotModal(true);
+              }} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded">Browse Lots</button>
+              <button onClick={() => window.open('/parcel-master/add', '_blank')} className="px-3 py-1.5 text-sm border border-blue-500 text-blue-600 rounded">Add Parcel Master</button>
+            </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
             <div className="space-y-1 xl:col-span-2">
@@ -463,8 +482,8 @@ export default function PurchasePage() {
             <F label="Shape" name="shape" value={lotDraft.shape} onChange={setItemValue} readOnly />
             <F label="Color" name="color" value={lotDraft.color} onChange={setItemValue} readOnly />
             <F label="Clarity" name="clarity" value={lotDraft.clarity} onChange={setItemValue} readOnly />
-            <F label="Size" name="size" value={lotDraft.size} onChange={setItemValue} readOnly />
-            <F label="Sieve" name="sieve" value={lotDraft.sieve} onChange={setItemValue} readOnly />
+            <F label="Size" name="size" value={lotDraft.size} onChange={setItemValue} options={masterOpts.sizes} />
+            <F label="Sieve" name="sieve" value={lotDraft.sieve} onChange={setItemValue} options={masterOpts.sieves} />
             <F label="Issue Carats *" name="issue_carats" value={lotDraft.issue_carats} onChange={setItemValue} type="number" />
             <F label="Reje%" name="reje_pct" value={lotDraft.reje_pct} onChange={setItemValue} type="number" />
             <F label="Rejection" name="rejection" value={lotDraft.rejection} onChange={setItemValue} type="number" />
@@ -589,6 +608,102 @@ export default function PurchasePage() {
             </div>
           </div>
         )}
+      </div>
+    </div>
+    {showLotModal && (
+      <LotBrowseModal
+        lotItems={opts.lot_items || []}
+        filters={lotFilters}
+        onFilterChange={(key, val) => setLotFilters((p) => ({ ...p, [key]: val }))}
+        onSelect={(lotNo) => { setLotFromMaster(lotNo); setShowLotModal(false); setLotFilters({}); }}
+        onClose={() => { setShowLotModal(false); setLotFilters({}); }}
+      />
+    )}
+    </>
+  );
+}
+
+const LOT_COLS = [
+  { key: 'lot_no', label: 'Lot No' },
+  { key: 'item_name', label: 'Item Name' },
+  { key: 'shape', label: 'Shape' },
+  { key: 'color', label: 'Color' },
+  { key: 'clarity', label: 'Clarity' },
+  { key: 'size', label: 'Size' },
+  { key: 'sieve', label: 'Sieve' },
+  { key: 'opening_weight_carats', label: 'Weight' },
+];
+
+function LotBrowseModal({ lotItems, filters, onFilterChange, onSelect, onClose }) {
+  const filtered = lotItems.filter((lot) =>
+    LOT_COLS.every(({ key }) => {
+      const f = String(filters[key] || '').trim().toLowerCase();
+      return !f || String(lot[key] || '').toLowerCase().includes(f);
+    })
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl mx-4 flex flex-col max-h-[85vh]">
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <h2 className="text-lg font-semibold text-gray-800">Browse Lots</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+        <div className="overflow-auto flex-1">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 sticky top-0 z-10">
+              <tr>
+                {LOT_COLS.map(({ label }) => (
+                  <th key={label} className="text-left px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{label}</th>
+                ))}
+                <th className="px-3 py-2" />
+              </tr>
+              <tr className="bg-white border-b">
+                {LOT_COLS.map(({ key }) => (
+                  <td key={key} className="px-2 py-1">
+                    <input
+                      type="text"
+                      placeholder="filter"
+                      value={filters[key] || ''}
+                      onChange={(e) => onFilterChange(key, e.target.value)}
+                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    />
+                  </td>
+                ))}
+                <td className="px-2 py-1">
+                  <button
+                    onClick={() => LOT_COLS.forEach(({ key }) => onFilterChange(key, ''))}
+                    className="text-xs text-gray-400 hover:text-red-500 whitespace-nowrap"
+                  >Clear</button>
+                </td>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr><td colSpan={LOT_COLS.length + 1} className="text-center py-8 text-gray-400">No lots found</td></tr>
+              )}
+              {filtered.map((lot) => (
+                <tr key={lot.lot_no} className="border-t border-gray-100 hover:bg-blue-50">
+                  <td className="px-3 py-2">{lot.lot_no}</td>
+                  <td className="px-3 py-2">{lot.item_name}</td>
+                  <td className="px-3 py-2">{lot.shape}</td>
+                  <td className="px-3 py-2">{lot.color}</td>
+                  <td className="px-3 py-2">{lot.clarity}</td>
+                  <td className="px-3 py-2">{lot.size}</td>
+                  <td className="px-3 py-2">{lot.sieve}</td>
+                  <td className="px-3 py-2 text-right">{lot.opening_weight_carats}</td>
+                  <td className="px-3 py-2">
+                    <button
+                      onClick={() => onSelect(lot.lot_no)}
+                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                    >Select</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-5 py-3 border-t text-xs text-gray-400">{filtered.length} lot{filtered.length !== 1 ? 's' : ''} shown</div>
       </div>
     </div>
   );
