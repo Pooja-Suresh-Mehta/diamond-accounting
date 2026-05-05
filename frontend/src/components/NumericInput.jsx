@@ -36,7 +36,7 @@ function applyCommas(raw) {
  *   className  - input className
  *   onFocus / onBlur - optional passthrough handlers
  */
-export default function NumericInput({ value, onChange, name, className, onFocus, onBlur }) {
+export default function NumericInput({ value, onChange, name, className, onFocus, onBlur, forceDecimal = false }) {
   const inputRef = useRef(null);
   const [display, setDisplay] = useState('');
 
@@ -104,7 +104,8 @@ export default function NumericInput({ value, onChange, name, className, onFocus
       setDisplay('');
       onChange(name, 0);
     } else {
-      setDisplay(applyCommas(stripped));
+      const formatted = forceDecimal ? applyCommas(num.toFixed(2)) : applyCommas(stripped);
+      setDisplay(formatted);
       onChange(name, num);
     }
     onBlur?.(e);

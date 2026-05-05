@@ -361,10 +361,10 @@ export default function PurchaseReturnPage() {
             <F label="Clarity" name="clarity" value={lotDraft.clarity} onChange={setItemValue} readOnly />
             <F label="Size" name="size" value={lotDraft.size} onChange={setItemValue} readOnly />
             <F label="Sieve" name="sieve" value={lotDraft.sieve} onChange={setItemValue} readOnly />
-            <F label="Issue Carats *" name="issue_carats" value={lotDraft.issue_carats} onChange={setItemValue} type="number" />
+            <F label="Issue Carats *" name="issue_carats" value={lotDraft.issue_carats} onChange={setItemValue} type="number" forceDecimal />
             <F label="Reje%" name="reje_pct" value={lotDraft.reje_pct} onChange={setItemValue} type="number" />
-            <F label="Rejection" name="rejection" value={lotDraft.rejection} onChange={setItemValue} type="number" />
-            <F label="Selected Carat" name="selected_carat" value={lotDraft.selected_carat} onChange={setItemValue} type="number" />
+            <F label="Rejection" name="rejection" value={lotDraft.rejection} onChange={setItemValue} type="number" forceDecimal />
+            <F label="Selected Carat" name="selected_carat" value={lotDraft.selected_carat} onChange={setItemValue} type="number" forceDecimal />
             <F label="Pcs" name="pcs" value={lotDraft.pcs} onChange={setItemValue} type="number" />
             <F label="Rate *" name="rate" value={lotDraft.rate} onChange={setItemValue} type="number" />
             <F label="$Rate" name="usd_rate" value={lotDraft.usd_rate} onChange={setItemValue} type="number" readOnly />

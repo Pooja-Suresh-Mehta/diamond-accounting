@@ -4,7 +4,7 @@ import { fmtAmt } from '../utils/format';
 
 export default function FormField({
   label, name, value, onChange, options = [], type = 'text',
-  searchable = false, readOnly = false, onAddNew, onBlur,
+  searchable = false, readOnly = false, onAddNew, onBlur, forceDecimal = false,
 }) {
   const cls = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none';
   const shouldSearch = options.length > 0 && (searchable || options.length > 10);
@@ -47,7 +47,7 @@ export default function FormField({
         readOnly && isNumber ? (
           <input type="text" value={fmtAmt(value)} readOnly className={cls} />
         ) : isNumber ? (
-          <NumericInput name={name} value={value} onChange={onChange} className={cls} />
+          <NumericInput name={name} value={value} onChange={onChange} className={cls} forceDecimal={forceDecimal} />
         ) : (
           <input
             type="text"

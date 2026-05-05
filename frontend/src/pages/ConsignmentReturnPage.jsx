@@ -266,13 +266,13 @@ export default function ConsignmentReturnPage() {
                   {[
                     { name: 'lot_number', lotOpts: lots },
                     { name: 'lot_number', readOnly: true },
-                    { name: 'issue_carats', type: 'number' },
+                    { name: 'issue_carats', type: 'number', forceDecimal: true },
                     { name: 'reje_pct', type: 'number' },
-                    { name: 'selected_carat', type: 'number' },
+                    { name: 'selected_carat', type: 'number', forceDecimal: true },
                     { name: 'pcs', type: 'number' },
                     { name: 'rate', type: 'number' },
                     { name: 'amount', type: 'number', readOnly: true },
-                  ].map(({ name, opts: o, lotOpts, type = 'text', readOnly }, colIdx) => (
+                  ].map(({ name, opts: o, lotOpts, type = 'text', readOnly, forceDecimal = false }, colIdx) => (
                     <td key={colIdx} className="px-1 py-1" style={{ minWidth: '80px' }}>
                       {lotOpts ? (
                         <select value={item.lot_number || ''} onChange={e => handleItem(idx, 'lot_number', e.target.value)}
@@ -290,7 +290,7 @@ export default function ConsignmentReturnPage() {
                         readOnly && type === 'number' ? (
                           <input type="text" value={fmtAmt(item[name])} readOnly className="w-full text-xs border border-gray-200 rounded px-1 py-1 bg-gray-50" />
                         ) : type === 'number' && !name.endsWith('_pct') ? (
-                          <NumericInput name={name} value={item[name]} onChange={(_, val) => handleItem(idx, name, val)} className="w-full text-xs border border-gray-200 rounded px-1 py-1" />
+                          <NumericInput name={name} value={item[name]} onChange={(_, val) => handleItem(idx, name, val)} className="w-full text-xs border border-gray-200 rounded px-1 py-1" forceDecimal={forceDecimal} />
                         ) : type === 'number' ? (
                           <input type="number" value={item[name] ?? ''} onChange={e => handleItem(idx, name, e.target.value)} className="w-full text-xs border border-gray-200 rounded px-1 py-1" />
                         ) : (

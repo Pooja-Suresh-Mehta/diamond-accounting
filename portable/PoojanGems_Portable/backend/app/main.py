@@ -226,4 +226,7 @@ if _STATIC_DIR.is_dir():
         file_path = _STATIC_DIR / full_path
         if file_path.is_file():
             return FileResponse(file_path)
-        return FileResponse(_STATIC_DIR / "index.html")
+        return FileResponse(
+            _STATIC_DIR / "index.html",
+            headers={"Cache-Control": "no-store"},
+        )

@@ -143,6 +143,10 @@ async def download_db_copy(user=Depends(get_current_user)):
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+    # Checkpoint WAL into the main DB file so the downloaded copy is complete
+    async with engine.connect() as conn:
+        await conn.execute(text("PRAGMA wal_checkpoint(TRUNCATE)"))
+
     def iter_file():
         with open(db_path, "rb") as f:
             while chunk := f.read(8192):

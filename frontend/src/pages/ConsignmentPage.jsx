@@ -299,14 +299,14 @@ export default function ConsignmentPage() {
                     { name: 'color', w: '60px', readOnly: true },
                     { name: 'clarity', w: '60px', readOnly: true },
                     { name: 'size', w: '80px', readOnly: true },
-                    { name: 'issue_carats', type: 'number', w: '80px' },
+                    { name: 'issue_carats', type: 'number', w: '80px', forceDecimal: true },
                     { name: 'reje_pct', type: 'number', w: '60px' },
-                    { name: 'rejection', type: 'number', w: '80px' },
-                    { name: 'selected_carat', type: 'number', w: '80px' },
+                    { name: 'rejection', type: 'number', w: '80px', forceDecimal: true },
+                    { name: 'selected_carat', type: 'number', w: '80px', forceDecimal: true },
                     { name: 'pcs', type: 'number', w: '60px' },
                     { name: 'rate', type: 'number', w: '80px' },
                     { name: 'amount', type: 'number', w: '100px', readOnly: true },
-                  ].map(({ name, opts: o, lotOpts, type = 'text', w, readOnly }, colIdx) => (
+                  ].map(({ name, opts: o, lotOpts, type = 'text', w, readOnly, forceDecimal = false }, colIdx) => (
                     <td key={colIdx} className="px-1 py-1" style={{ minWidth: w }}>
                       {lotOpts ? (
                         <select value={item.lot_number || ''} onChange={e => handleItem(idx, 'lot_number', e.target.value)}
@@ -324,7 +324,7 @@ export default function ConsignmentPage() {
                         readOnly && type === 'number' ? (
                           <input type="text" value={fmtAmt(item[name])} readOnly className="w-full text-xs border border-gray-200 rounded px-1 py-1 bg-gray-50" />
                         ) : type === 'number' && !name.endsWith('_pct') ? (
-                          <NumericInput name={name} value={item[name]} onChange={(_, val) => handleItem(idx, name, val)} className="w-full text-xs border border-gray-200 rounded px-1 py-1" />
+                          <NumericInput name={name} value={item[name]} onChange={(_, val) => handleItem(idx, name, val)} className="w-full text-xs border border-gray-200 rounded px-1 py-1" forceDecimal={forceDecimal} />
                         ) : type === 'number' ? (
                           <input type="number" value={item[name] ?? ''} onChange={e => handleItem(idx, name, e.target.value)} className="w-full text-xs border border-gray-200 rounded px-1 py-1" />
                         ) : (

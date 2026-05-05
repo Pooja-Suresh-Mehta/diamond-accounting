@@ -39,7 +39,7 @@ export const applyLotAutoFields = (item, lot) => ({
   clarity: lot?.clarity || '',
   size: lot?.size || '',
   sieve: lot?.sieve || '',
-  issue_carats: toNumber(item?.issue_carats || lot?.opening_weight_carats || 0),
+  issue_carats: toNumber(item?.issue_carats || 0),
   selected_carat: toNumber(item?.selected_carat || lot?.opening_weight_carats || 0),
   pcs: toNumber(item?.pcs || lot?.opening_pcs || 0),
 });
@@ -72,6 +72,10 @@ export const normalizeLineItem = (item, { currency, inrRate, aedRate, sourceFiel
   } else if (sourceField === 'selected_carat') {
     selected = Math.min(Math.max(selected, 0), issue);
     rejection = issue - selected;
+    rejePct = issue > 0 ? (rejection / issue) * 100 : 0;
+  } else if (sourceField === 'issue_carats') {
+    rejection = Math.min(rejection, issue);
+    selected = issue - rejection;
     rejePct = issue > 0 ? (rejection / issue) * 100 : 0;
   } else if (issue > 0) {
     if (rejection > 0 && rejePct === 0) rejePct = (rejection / issue) * 100;

@@ -17,7 +17,7 @@ from datetime import datetime
 import sys
 
 DB_PATH   = "backend/diamond_accounting.db"
-BACKUP_XL = sys.argv[1] if len(sys.argv) > 1 else "backend/poojan_gems_backup_20260425_195217.xlsx"
+BACKUP_XL = sys.argv[1] if len(sys.argv) > 1 else "backend/poojan_gems_backup_20260428_115346.xlsx"
 
 
 def sheet_to_rows(ws):

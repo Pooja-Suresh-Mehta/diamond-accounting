@@ -57,7 +57,7 @@ const SIZE_SIEVE_DEFAULTS = {
   '0.40 UP': '3/8', '0.50 UP': '1/2',
 };
 
-function Field({ name, label, value, onChange, options = [], rows = 1, readOnly = false }) {
+function Field({ name, label, value, onChange, options = [], rows = 1, readOnly = false, forceDecimal = false }) {
   const cls = `w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none ${readOnly ? 'bg-gray-100 text-gray-700' : ''}`;
   if (options.length) {
     return (
@@ -91,7 +91,7 @@ function Field({ name, label, value, onChange, options = [], rows = 1, readOnly 
     return (
       <div className="space-y-1">
         <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
-        <NumericInput name={name} value={value} onChange={onChange} className={cls} />
+        <NumericInput name={name} value={value} onChange={onChange} className={cls} forceDecimal={forceDecimal} />
       </div>
     );
   }
@@ -562,7 +562,7 @@ export default function ParcelMasterPage() {
 
         <div className="border-t pt-5 space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <Field name="opening_weight_carats" label="Opening Weight/Carats" value={form.opening_weight_carats} onChange={setValue} />
+            <Field name="opening_weight_carats" label="Opening Weight/Carats" value={form.opening_weight_carats} onChange={setValue} forceDecimal />
             <div className="space-y-1">
               <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Purchase Price</label>
               <div className="flex">
