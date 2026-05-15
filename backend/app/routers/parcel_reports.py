@@ -2,11 +2,12 @@
 Parcel Reports (01-10) - Read-only query endpoints.
 Each report filters and returns data from transaction tables.
 """
+from collections import defaultdict
 from datetime import date as date_type
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case as sa_case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -15,7 +16,7 @@ from app.database import get_db
 from app.models.models import (
     Consignment, ConsignmentItem, ConsignmentReturn, ConsignmentReturnItem,
     LedgerEntry, MemoOut, MemoOutItem, MemoOutReturn, MemoOutReturnItem,
-    ParcelMaster, ParcelPurchase, ParcelPurchaseItem, ParcelPurchaseReturn, ParcelPurchaseReturnItem,
+    ParcelMaster, ParcelMergeLog, ParcelPurchase, ParcelPurchaseItem, ParcelPurchaseReturn, ParcelPurchaseReturnItem,
     Sale, SaleItem, SaleReturn, SaleReturnItem, User,
 )
 from app.utils import CURRENCIES
@@ -51,7 +52,6 @@ async def parcel_stock_report(
     carat_to: Optional[float] = Query(default=None),
     price_from: Optional[float] = Query(default=None),
     price_to: Optional[float] = Query(default=None),
-    # Numeric filters
     table_depth_from: Optional[float] = Query(default=None),
     table_depth_to: Optional[float] = Query(default=None),
     table_pct_from: Optional[float] = Query(default=None),
@@ -64,13 +64,26 @@ async def parcel_stock_report(
     ph_to: Optional[float] = Query(default=None),
     pa_from: Optional[float] = Query(default=None),
     pa_to: Optional[float] = Query(default=None),
-    # Date filters
     purchase_date_from: Optional[date_type] = Query(default=None),
     purchase_date_to: Optional[date_type] = Query(default=None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    q = select(ParcelMaster).where(ParcelMaster.company_id == current_user.company_id)
+    """
+    Stock report generated on-the-fly from transaction tables.
+    purchased_weight = SUM(purchase_items.issue_carats) - SUM(return_items.issue_carats)
+    sold_weight      = SUM(sale_items.issue_carats) - SUM(sale_return_items.issue_carats)
+    on_memo_weight   = SUM(memo_items.issue_carats) - SUM(memo_return_items.issue_carats)
+    consignment_wt   = SUM(consign_items.issue_carats) - SUM(consign_return_items.issue_carats)
+    on_hand          = opening_weight_carats + purchased - sold - on_memo - consignment
+    """
+    cid = current_user.company_id
+
+    # --- Base parcel query (manual entries only, non-absorbed) ---
+    q = select(ParcelMaster).where(
+        ParcelMaster.company_id == cid,
+        ParcelMaster.merged_into_lot_no.is_(None),
+    )
     if shape:
         shapes = [s.strip() for s in shape.split(',')]
         q = q.where(or_(*[ParcelMaster.shape.ilike(f"%{s}%") for s in shapes]))
@@ -90,22 +103,6 @@ async def parcel_stock_report(
     if lab:
         labs = [l.strip() for l in lab.split(',')]
         q = q.where(or_(*[ParcelMaster.lab.ilike(f"%{l}%") for l in labs]))
-    if carat_from is not None:
-        on_hand_expr = (
-            func.coalesce(ParcelMaster.opening_weight_carats, 0)
-            + func.coalesce(ParcelMaster.purchased_weight, 0)
-            - func.coalesce(ParcelMaster.sold_weight, 0)
-            - func.coalesce(ParcelMaster.on_memo_weight, 0)
-        )
-        q = q.where(on_hand_expr >= carat_from)
-    if carat_to is not None:
-        on_hand_expr = (
-            func.coalesce(ParcelMaster.opening_weight_carats, 0)
-            + func.coalesce(ParcelMaster.purchased_weight, 0)
-            - func.coalesce(ParcelMaster.sold_weight, 0)
-            - func.coalesce(ParcelMaster.on_memo_weight, 0)
-        )
-        q = q.where(on_hand_expr <= carat_to)
     if price_from is not None:
         q = q.where(ParcelMaster.asking_price_usd_carats >= price_from)
     if price_to is not None:
@@ -115,27 +112,237 @@ async def parcel_stock_report(
     if purchase_date_to:
         q = q.where(ParcelMaster.created_at <= purchase_date_to)
     q = q.order_by(ParcelMaster.lot_no)
-    rows = (await db.execute(q)).scalars().all()
+    parcels = (await db.execute(q)).scalars().all()
+
+    lot_numbers = [p.lot_no for p in parcels]
+    if not lot_numbers:
+        return {"results": [], "totals": {"purchased_weight": 0, "sold_weight": 0, "on_memo_weight": 0, "consignment_weight": 0, "on_hand_weight": 0}}
+
+    # --- Fetch active merge logs to include absorbed lots in all queries ---
+    _merge_q = select(ParcelMergeLog).where(
+        ParcelMergeLog.company_id == cid,
+        ParcelMergeLog.surviving_lot_no.in_(lot_numbers),
+        ParcelMergeLog.reversed == False,  # noqa: E712
+    )
+    merge_log_rows = (await db.execute(_merge_q)).scalars().all()
+    merges_by_surviving: dict = defaultdict(list)
+    for ml in merge_log_rows:
+        merges_by_surviving[ml.surviving_lot_no].append(ml)
+    merged_lot_numbers = [ml.merged_lot_no for ml in merge_log_rows]
+    all_lot_numbers = lot_numbers + merged_lot_numbers
+
+    # --- Aggregate purchases per lot (weight + INR cost + USD cost) ---
+    purch_q = (
+        select(
+            ParcelPurchaseItem.lot_number,
+            func.coalesce(func.sum(ParcelPurchaseItem.issue_carats), 0).label("w"),
+            func.coalesce(func.sum(ParcelPurchaseItem.amount), 0).label("amt_inr"),
+            func.coalesce(func.sum(
+                sa_case(
+                    (ParcelPurchaseItem.usd_rate > 0,
+                     ParcelPurchaseItem.issue_carats * ParcelPurchaseItem.usd_rate),
+                    else_=0,
+                )
+            ), 0).label("amt_usd_direct"),
+            func.coalesce(func.sum(
+                sa_case(
+                    (or_(ParcelPurchaseItem.usd_rate.is_(None), ParcelPurchaseItem.usd_rate <= 0),
+                     ParcelPurchaseItem.amount),
+                    else_=0,
+                )
+            ), 0).label("amt_inr_no_usd"),
+        )
+        .join(ParcelPurchase, ParcelPurchaseItem.purchase_id == ParcelPurchase.id)
+        .where(ParcelPurchase.company_id == cid, ParcelPurchaseItem.lot_number.in_(all_lot_numbers))
+        .group_by(ParcelPurchaseItem.lot_number)
+    )
+    purch_ret_q = (
+        select(
+            ParcelPurchaseReturnItem.lot_number,
+            func.coalesce(func.sum(ParcelPurchaseReturnItem.issue_carats), 0).label("w"),
+            func.coalesce(func.sum(ParcelPurchaseReturnItem.amount), 0).label("amt_inr"),
+            func.coalesce(func.sum(
+                sa_case(
+                    (ParcelPurchaseReturnItem.usd_rate > 0,
+                     ParcelPurchaseReturnItem.issue_carats * ParcelPurchaseReturnItem.usd_rate),
+                    else_=0,
+                )
+            ), 0).label("amt_usd_direct"),
+            func.coalesce(func.sum(
+                sa_case(
+                    (or_(ParcelPurchaseReturnItem.usd_rate.is_(None), ParcelPurchaseReturnItem.usd_rate <= 0),
+                     ParcelPurchaseReturnItem.amount),
+                    else_=0,
+                )
+            ), 0).label("amt_inr_no_usd"),
+        )
+        .join(ParcelPurchaseReturn, ParcelPurchaseReturnItem.purchase_return_id == ParcelPurchaseReturn.id)
+        .where(ParcelPurchaseReturn.company_id == cid, ParcelPurchaseReturnItem.lot_number.in_(all_lot_numbers))
+        .group_by(ParcelPurchaseReturnItem.lot_number)
+    )
+
+    # --- Aggregate sales per lot ---
+    sale_q = (
+        select(SaleItem.lot_number, func.coalesce(func.sum(SaleItem.issue_carats), 0).label("w"))
+        .join(Sale, SaleItem.sale_id == Sale.id)
+        .where(Sale.company_id == cid, SaleItem.lot_number.in_(all_lot_numbers))
+        .group_by(SaleItem.lot_number)
+    )
+    sale_ret_q = (
+        select(SaleReturnItem.lot_number, func.coalesce(func.sum(SaleReturnItem.issue_carats), 0).label("w"))
+        .join(SaleReturn, SaleReturnItem.sale_return_id == SaleReturn.id)
+        .where(SaleReturn.company_id == cid, SaleReturnItem.lot_number.in_(all_lot_numbers))
+        .group_by(SaleReturnItem.lot_number)
+    )
+
+    # --- Aggregate memo per lot (memo items use 'weight', not 'issue_carats') ---
+    memo_q = (
+        select(MemoOutItem.lot_number, func.coalesce(func.sum(MemoOutItem.weight), 0).label("w"))
+        .join(MemoOut, MemoOutItem.memo_out_id == MemoOut.id)
+        .where(MemoOut.company_id == cid, MemoOutItem.lot_number.in_(all_lot_numbers))
+        .group_by(MemoOutItem.lot_number)
+    )
+    memo_ret_q = (
+        select(MemoOutReturnItem.lot_number, func.coalesce(func.sum(MemoOutReturnItem.weight), 0).label("w"))
+        .join(MemoOutReturn, MemoOutReturnItem.memo_out_return_id == MemoOutReturn.id)
+        .where(MemoOutReturn.company_id == cid, MemoOutReturnItem.lot_number.in_(all_lot_numbers))
+        .group_by(MemoOutReturnItem.lot_number)
+    )
+
+    # --- Aggregate consignment per lot ---
+    consign_q = (
+        select(ConsignmentItem.lot_number, func.coalesce(func.sum(ConsignmentItem.issue_carats), 0).label("w"))
+        .join(Consignment, ConsignmentItem.consignment_id == Consignment.id)
+        .where(Consignment.company_id == cid, ConsignmentItem.lot_number.in_(all_lot_numbers))
+        .group_by(ConsignmentItem.lot_number)
+    )
+    consign_ret_q = (
+        select(ConsignmentReturnItem.lot_number, func.coalesce(func.sum(ConsignmentReturnItem.issue_carats), 0).label("w"))
+        .join(ConsignmentReturn, ConsignmentReturnItem.consignment_return_id == ConsignmentReturn.id)
+        .where(ConsignmentReturn.company_id == cid, ConsignmentReturnItem.lot_number.in_(all_lot_numbers))
+        .group_by(ConsignmentReturnItem.lot_number)
+    )
+
+    # Run all aggregations
+    (
+        purch_rows, purch_ret_rows,
+        sale_rows, sale_ret_rows,
+        memo_rows, memo_ret_rows,
+        consign_rows, consign_ret_rows,
+    ) = [
+        (await db.execute(q_)).all()
+        for q_ in [purch_q, purch_ret_q, sale_q, sale_ret_q, memo_q, memo_ret_q, consign_q, consign_ret_q]
+    ]
+
+    def _windex(rows): return {r.lot_number: float(r.w) for r in rows}
+    def _get_sum(d, lots): return sum(d.get(ln, 0) for ln in lots)
+
+    # Weight indices
+    purchased_w_idx  = _windex(purch_rows)
+    purch_ret_w_idx  = _windex(purch_ret_rows)
+    sold_w_idx       = _windex(sale_rows)
+    sale_ret_w_idx   = _windex(sale_ret_rows)
+    memo_out_idx     = _windex(memo_rows)
+    memo_ret_idx     = _windex(memo_ret_rows)
+    consignment_idx  = _windex(consign_rows)
+    consign_ret_idx  = _windex(consign_ret_rows)
+
+    # Cost amount indices (from purchase items)
+    purch_inr_idx       = {r.lot_number: float(r.amt_inr)       for r in purch_rows}
+    purch_usd_idx       = {r.lot_number: float(r.amt_usd_direct) for r in purch_rows}
+    purch_inr_nfx_idx   = {r.lot_number: float(r.amt_inr_no_usd) for r in purch_rows}
+    pret_inr_idx        = {r.lot_number: float(r.amt_inr)        for r in purch_ret_rows}
+    pret_usd_idx        = {r.lot_number: float(r.amt_usd_direct) for r in purch_ret_rows}
+    pret_inr_nfx_idx    = {r.lot_number: float(r.amt_inr_no_usd) for r in purch_ret_rows}
 
     result = []
-    for r in rows:
-        on_hand = (
-            float(r.opening_weight_carats or 0)
-            + float(r.purchased_weight or 0)
-            - float(r.sold_weight or 0)
-            - float(r.on_memo_weight or 0)
+    for r in parcels:
+        ln = r.lot_no
+        pm_rate  = float(r.usd_to_inr_rate or 90)
+        ml_list  = merges_by_surviving.get(ln, [])
+        all_lots = [ln] + [ml.merged_lot_no for ml in ml_list]
+
+        # ── Weights ──────────────────────────────────────────────────────────
+        # Opening = PM manual entry + absorbed parcels' opening snapshots from merge logs
+        merge_opening = sum(ml.merged_weight or 0 for ml in ml_list)
+        opening       = float(r.opening_weight_carats or 0) + merge_opening
+
+        purchased_w   = round(_get_sum(purchased_w_idx, all_lots) - _get_sum(purch_ret_w_idx, all_lots), 4)
+        sold_w        = round(_get_sum(sold_w_idx,      all_lots) - _get_sum(sale_ret_w_idx,   all_lots), 4)
+        on_memo_w     = round(_get_sum(memo_out_idx,    all_lots) - _get_sum(memo_ret_idx,      all_lots), 4)
+        consignment_w = round(_get_sum(consignment_idx, all_lots) - _get_sum(consign_ret_idx,   all_lots), 4)
+        on_hand       = round(opening + purchased_w - sold_w - on_memo_w - consignment_w, 4)
+        total_cost_weight = opening + purchased_w
+
+        # Apply carat filters post-aggregation (on_hand is computed, not stored)
+        if carat_from is not None and on_hand < carat_from:
+            continue
+        if carat_to is not None and on_hand > carat_to:
+            continue
+
+        # ── Cost calculations ─────────────────────────────────────────────────
+        # Source 1: PM manual opening entry
+        cost_inr_base = float(r.purchase_cost_inr_amount or 0)
+        cost_usd_base = float(r.purchase_cost_usd_amount or 0)
+
+        # Source 2: Merge log snapshots (absorbed parcels' PM opening costs)
+        cost_inr_merges = sum(ml.merged_purchase_cost_inr or 0 for ml in ml_list)
+        cost_usd_merges = sum(ml.merged_purchase_cost_usd or 0 for ml in ml_list)
+
+        # Source 3: Purchase table entries for this lot + all merged lots
+        #   INR: direct sum of amount column
+        #   USD: items with usd_rate use (issue_carats × usd_rate); items without usd_rate use (amount / pm_rate)
+        purch_inr_raw     = _get_sum(purch_inr_idx,     all_lots) - _get_sum(pret_inr_idx,     all_lots)
+        purch_usd_direct  = _get_sum(purch_usd_idx,     all_lots) - _get_sum(pret_usd_idx,     all_lots)
+        purch_inr_no_usd  = _get_sum(purch_inr_nfx_idx, all_lots) - _get_sum(pret_inr_nfx_idx, all_lots)
+        purch_usd_raw     = purch_usd_direct + (purch_inr_no_usd / pm_rate if pm_rate else 0)
+
+        total_cost_inr = cost_inr_base + cost_inr_merges + purch_inr_raw
+        total_cost_usd = cost_usd_base + cost_usd_merges + purch_usd_raw
+
+        if total_cost_weight > 0:
+            cost_inr_carat = round(total_cost_inr / total_cost_weight, 2)
+            cost_usd_carat = round(total_cost_usd / total_cost_weight, 2)
+        else:
+            cost_inr_carat = 0.0
+            cost_usd_carat = 0.0
+
+        # ── Asking price calculations ─────────────────────────────────────────
+        # Ask amount = PM asking amount + merge log asking snapshots
+        #            + purchase item amounts × 1.06 (6% markup on purchased goods)
+        # Per-carat ask = total ask amount / total cost weight
+        ask_inr_amt = round(
+            float(r.asking_inr_amount or 0)
+            + sum(ml.merged_asking_inr or 0 for ml in ml_list)
+            + purch_inr_raw * 1.06,
+            2,
         )
-        carats = float(r.opening_weight_carats or 0) + float(r.purchased_weight or 0)
-        on_memo = float(r.on_memo_weight or 0)
-        sold = float(r.sold_weight or 0)
-        if on_memo > 0:
+        ask_usd_amt = round(
+            float(r.asking_usd_amount or 0)
+            + sum(ml.merged_asking_usd or 0 for ml in ml_list)
+            + purch_usd_raw * 1.06,
+            2,
+        )
+
+        if total_cost_weight > 0:
+            ask_inr_carat = round(ask_inr_amt / total_cost_weight, 2)
+            ask_usd_carat = round(ask_usd_amt / total_cost_weight, 2)
+        else:
+            ask_inr_carat = 0.0
+            ask_usd_carat = 0.0
+
+        # ── Status ────────────────────────────────────────────────────────────
+        if on_memo_w > 0:
             cur_status = "Memo"
-        elif sold >= carats and carats > 0:
+        elif consignment_w > 0:
+            cur_status = "Consignment"
+        elif sold_w >= (opening + purchased_w) and (opening + purchased_w) > 0:
             cur_status = "Sold"
         elif on_hand > 0:
             cur_status = "Available"
         else:
             cur_status = "Nil"
+
         result.append({
             "id": r.id,
             "created_date": str(r.created_at.date()) if r.created_at else None,
@@ -150,37 +357,37 @@ async def parcel_stock_report(
             "stock_type": r.stock_type or "",
             "stock_subtype": r.stock_subtype or "",
             "grown_process_type": r.grown_process_type or "",
-            "opening_weight_carats": round(float(r.opening_weight_carats or 0), 3),
-            "carats": round(carats, 3),
-            "purchased_weight": round(float(r.purchased_weight or 0), 3),
-            "purchased_pcs": r.purchased_pcs or 0,
-            "sold_weight": round(sold, 3),
-            "sold_pcs": r.sold_pcs or 0,
-            "on_memo_weight": round(on_memo, 3),
-            "on_memo_pcs": r.on_memo_pcs or 0,
+            "opening_weight_carats": round(opening, 3),
+            "purchased_weight": round(purchased_w, 3),
+            "sold_weight": round(sold_w, 3),
+            "on_memo_weight": round(on_memo_w, 3),
+            "consignment_weight": round(consignment_w, 3),
             "on_hand_weight": round(on_hand, 3),
+            "carats": round(total_cost_weight, 3),
             "cur_status": cur_status,
-            "purchase_price": round(float(r.purchase_price or 0), 2),
             "purchase_price_currency": r.purchase_price_currency or "",
-            "usd_to_inr_rate": round(float(r.usd_to_inr_rate or 0), 2),
-            "purchase_cost_usd_carat": round(float(r.purchase_cost_usd_carat or 0), 2),
-            "purchase_cost_inr_carat": round(float(r.purchase_cost_inr_carat or 0), 2),
-            "purchase_cost_usd_amount": round(float(r.purchase_cost_usd_amount or 0), 2),
-            "purchase_cost_inr_amount": round(float(r.purchase_cost_inr_amount or 0), 2),
-            "asking_price_usd_carats": round(float(r.asking_price_usd_carats or 0), 2),
-            "asking_price_inr_carats": round(float(r.asking_price_inr_carats or 0), 2),
-            "asking_usd_amount": round(float(r.asking_usd_amount or 0), 2),
-            "asking_inr_amount": round(float(r.asking_inr_amount or 0), 2),
+            "usd_to_inr_rate": round(pm_rate, 2),
+            "purchase_cost_usd_carat": cost_usd_carat,
+            "purchase_cost_inr_carat": cost_inr_carat,
+            "purchase_cost_usd_amount": round(total_cost_usd, 2),
+            "purchase_cost_inr_amount": round(total_cost_inr, 2),
+            "asking_price_usd_carats": ask_usd_carat,
+            "asking_price_inr_carats": ask_inr_carat,
+            "asking_usd_amount": ask_usd_amt,
+            "asking_inr_amount": ask_inr_amt,
         })
+
     return {
         "results": result,
         "totals": {
             "purchased_weight": round(sum(r["purchased_weight"] for r in result), 2),
             "sold_weight": round(sum(r["sold_weight"] for r in result), 2),
             "on_memo_weight": round(sum(r["on_memo_weight"] for r in result), 2),
+            "consignment_weight": round(sum(r["consignment_weight"] for r in result), 2),
             "on_hand_weight": round(sum(r["on_hand_weight"] for r in result), 2),
         }
     }
+
 
 
 # ── Update Location ──────────────────────────────────────

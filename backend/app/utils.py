@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.models import ParcelMaster, User
+from app.models.models import User
 
 # ── Constants ────────────────────────────────────────────
 
@@ -89,88 +89,26 @@ def parse_float_value(v: Any) -> float:
     return float(v)
 
 
-# ── Stock adjustment on ParcelMaster ─────────────────────
+def normalize_lot_no(lot_no: str | None) -> str:
+    """Normalize lot number to 4-digit zero-padded format (e.g., '59' -> '0059')."""
+    if not lot_no:
+        return ""
+    s = str(lot_no).strip()
+    if not s:
+        return ""
+    # Try to extract the numeric part if it contains text
+    import re
+    m = re.search(r'(\d+)$', s)
+    if m:
+        num_str = m.group(1)
+    else:
+        num_str = s
+    try:
+        return f"{int(num_str):04d}"
+    except ValueError:
+        # If not a valid number, return as-is
+        return s
 
-async def adjust_parcel_stock(
-    db: AsyncSession,
-    *,
-    company_id: str,
-    items: list,
-    operation: str,
-):
-    """
-    Adjust ParcelMaster running balances based on transaction type.
-
-    operation is one of:
-      "purchase"             → increase purchased_weight/pcs
-      "purchase_reverse"     → decrease purchased_weight/pcs (delete/return)
-      "sale"                 → increase sold_weight/pcs
-      "sale_reverse"         → decrease sold_weight/pcs (delete/return)
-      "memo_out"             → increase on_memo_weight/pcs
-      "memo_out_reverse"     → decrease on_memo_weight/pcs (delete/return)
-      "consignment"          → increase consignment_weight/pcs
-      "consignment_reverse"  → decrease consignment_weight/pcs (delete/return)
-    """
-    lot_numbers = []
-    for item in items:
-        lot_no = getattr(item, "lot_number", None) or getattr(item, "lot_no", None) or ""
-        lot_no = str(lot_no).strip()
-        if lot_no:
-            lot_numbers.append(lot_no)
-    if not lot_numbers:
-        return
-
-    existing_rows = (
-        await db.execute(
-            select(ParcelMaster).where(
-                ParcelMaster.company_id == company_id,
-                func.lower(ParcelMaster.lot_no).in_([ln.lower() for ln in lot_numbers]),
-            )
-        )
-    ).scalars().all()
-    lookup = {r.lot_no.strip().lower(): r for r in existing_rows}
-
-    for item in items:
-        lot_no = getattr(item, "lot_number", None) or getattr(item, "lot_no", None) or ""
-        lot_no = str(lot_no).strip()
-        if not lot_no:
-            continue
-        row = lookup.get(lot_no.lower())
-        if not row:
-            continue
-
-        weight = float(
-            getattr(item, "selected_carat", 0)
-            or getattr(item, "issue_carats", 0)
-            or getattr(item, "weight", 0)
-            or 0
-        )
-        pcs = int(getattr(item, "pcs", 0) or 0)
-
-        if operation == "purchase":
-            row.purchased_weight = float(row.purchased_weight or 0) + weight
-            row.purchased_pcs = int(row.purchased_pcs or 0) + pcs
-        elif operation == "purchase_reverse":
-            row.purchased_weight = max(0, float(row.purchased_weight or 0) - weight)
-            row.purchased_pcs = max(0, int(row.purchased_pcs or 0) - pcs)
-        elif operation == "sale":
-            row.sold_weight = float(row.sold_weight or 0) + weight
-            row.sold_pcs = int(row.sold_pcs or 0) + pcs
-        elif operation == "sale_reverse":
-            row.sold_weight = max(0, float(row.sold_weight or 0) - weight)
-            row.sold_pcs = max(0, int(row.sold_pcs or 0) - pcs)
-        elif operation == "memo_out":
-            row.on_memo_weight = float(row.on_memo_weight or 0) + weight
-            row.on_memo_pcs = int(row.on_memo_pcs or 0) + pcs
-        elif operation == "memo_out_reverse":
-            row.on_memo_weight = max(0, float(row.on_memo_weight or 0) - weight)
-            row.on_memo_pcs = max(0, int(row.on_memo_pcs or 0) - pcs)
-        elif operation == "consignment":
-            row.consignment_weight = float(getattr(row, "consignment_weight", 0) or 0) + weight
-            row.consignment_pcs = int(getattr(row, "consignment_pcs", 0) or 0) + pcs
-        elif operation == "consignment_reverse":
-            row.consignment_weight = max(0, float(getattr(row, "consignment_weight", 0) or 0) - weight)
-            row.consignment_pcs = max(0, int(getattr(row, "consignment_pcs", 0) or 0) - pcs)
 
 
 async def post_ledger_entries(

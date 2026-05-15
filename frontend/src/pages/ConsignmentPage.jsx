@@ -165,7 +165,7 @@ export default function ConsignmentPage() {
         await api.post('/consignment', payload);
         toast.success('Consignment saved');
       }
-      navigate('/parcel/consignment-in');
+      navigate('/parcel-transaction/consignment-in');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Save failed');
     } finally {
@@ -205,7 +205,7 @@ export default function ConsignmentPage() {
           <h1 className="text-2xl font-bold text-gray-800">Parcel Transactions / Consignment In</h1>
           <div className="flex gap-2">
             <button onClick={exportExcel} className="px-3 py-2 text-sm bg-gray-200 rounded-lg flex items-center gap-1.5"><Download className="w-4 h-4" /> Export Excel</button>
-            <button onClick={() => { setForm({ ...INIT, invoice_number: opts.next_invoice_number || '' }); setView('form'); navigate('/parcel/consignment-in/add'); }} className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg flex items-center gap-1.5"><Plus className="w-4 h-4" /> Add Consignment</button>
+            <button onClick={() => { setForm({ ...INIT, invoice_number: opts.next_invoice_number || '' }); setView('form'); navigate('/parcel-transaction/consignment-in/add'); }} className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg flex items-center gap-1.5"><Plus className="w-4 h-4" /> Add Consignment</button>
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
@@ -231,7 +231,7 @@ export default function ConsignmentPage() {
                     <td className="px-4 py-3">{fmtAmt(r.usd_amt)}</td>
                     <td className="px-4 py-3"><span className="px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-800">{r.payment_status}</span></td>
                     <td className="px-4 py-3 flex gap-2">
-                      <button onClick={() => navigate(`/parcel/consignment-in/edit/${r.id}`)} className="text-blue-600 hover:underline text-xs">Edit</button>
+                      <button onClick={() => navigate(`/parcel-transaction/consignment-in/edit/${r.id}`)} className="text-blue-600 hover:underline text-xs">Edit</button>
                       <button onClick={() => handleDelete(r.id)} className="text-red-600 hover:underline text-xs">Delete</button>
                     </td>
                   </tr>
@@ -249,7 +249,7 @@ export default function ConsignmentPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-4">
-        <button onClick={() => { navigate('/parcel/consignment-in'); setView('list'); }} className="text-sm text-blue-600 hover:underline">← Back to list</button>
+        <button onClick={() => { navigate('/parcel-transaction/consignment-in'); setView('list'); }} className="text-sm text-blue-600 hover:underline">← Back to list</button>
         <h2 className="text-lg font-semibold">{isEdit ? 'Edit' : 'New'} Consignment In</h2>
         <button onClick={handleSave} disabled={saving} className="ml-auto flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm">
           <Save className="w-4 h-4" />{saving ? 'Saving...' : 'Save'}

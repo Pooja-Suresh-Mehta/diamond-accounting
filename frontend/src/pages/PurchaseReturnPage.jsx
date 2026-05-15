@@ -233,7 +233,7 @@ export default function PurchaseReturnPage() {
       if (isEditMode) await api.put(`/parcel/purchase-return/${id}`, payload);
       else await api.post('/parcel/purchase-return', payload);
       toast.success(isEditMode ? 'Updated' : 'Created');
-      navigate('/parcel/purchase-return', { replace: true });
+      navigate('/parcel-transaction/purchase-return', { replace: true });
     } catch (e) {
       const d = e?.response?.data?.detail;
       toast.error(typeof d === 'string' ? d : 'Save failed');
@@ -255,7 +255,7 @@ export default function PurchaseReturnPage() {
           <h1 className="text-2xl font-bold text-gray-800">Parcel Transactions / Purchase Return</h1>
           <div className="flex gap-2">
             <button onClick={exportExcel} className="px-3 py-2 text-sm bg-gray-200 rounded-lg flex items-center gap-1.5"><Download className="w-4 h-4" /> Export Excel</button>
-            <button onClick={() => { navigate('/parcel/purchase-return/add'); }} className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg flex items-center gap-1.5"><Plus className="w-4 h-4" /> Create Purchase Return</button>
+            <button onClick={() => { navigate('/parcel-transaction/purchase-return/add'); }} className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg flex items-center gap-1.5"><Plus className="w-4 h-4" /> Create Purchase Return</button>
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
@@ -286,7 +286,7 @@ export default function PurchaseReturnPage() {
                   <tr key={r.id} className="border-t border-gray-100">
                     <td className="px-3 py-2">
                       <div className="flex gap-2">
-                        <button onClick={() => navigate(`/parcel/purchase-return/edit/${r.id}`)} className="text-blue-600">Edit</button>
+                        <button onClick={() => navigate(`/parcel-transaction/purchase-return/edit/${r.id}`)} className="text-blue-600">Edit</button>
                         <button onClick={() => removeRow(r.id)} className="text-red-600"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>

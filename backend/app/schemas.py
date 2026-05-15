@@ -339,13 +339,13 @@ class ParcelMasterBase(BaseModel):
     sieve_mm: Optional[str] = None
     stock_group_id: Optional[str] = None
     description: Optional[str] = None
-    stock_type: str = "Natural Diamond"
-    stock_subtype: str = "Polished"
-    grown_process_type: str = "Natural"
+    stock_type: Optional[str] = "Natural Diamond"
+    stock_subtype: Optional[str] = "Polished"
+    grown_process_type: Optional[str] = "Natural"
     opening_weight_carats: float = 0.0
     usd_to_inr_rate: float = 0.0
     purchase_price: float = 0.0
-    purchase_price_currency: str = "USD"
+    purchase_price_currency: Optional[str] = "USD"
     purchase_cost_usd_amount: float = 0.0
     purchase_cost_inr_amount: float = 0.0
     purchase_cost_inr_carat: float = 0.0
@@ -383,14 +383,7 @@ class ParcelMasterUpdate(ParcelMasterBase):
 class ParcelMasterOut(ParcelMasterBase):
     id: str
     company_id: str
-    purchased_weight: float = 0
-    purchased_pcs: int = 0
-    sold_weight: float = 0
-    sold_pcs: int = 0
-    on_memo_weight: float = 0
-    on_memo_pcs: int = 0
-    consignment_weight: float = 0
-    consignment_pcs: int = 0
+    merged_into_lot_no: Optional[str] = None
     created_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -408,6 +401,7 @@ class ParcelMergeLogOut(BaseModel):
     id: str
     surviving_parcel_id: str
     surviving_lot_no: str
+    merged_parcel_id: Optional[str] = None
     merged_lot_no: str
     merged_weight: float = 0
     merged_purchase_cost_inr: float = 0
@@ -415,12 +409,19 @@ class ParcelMergeLogOut(BaseModel):
     merged_asking_inr: float = 0
     merged_asking_usd: float = 0
     merged_purchase_price: float = 0
-    merged_purchase_price_currency: str = "USD"
+    merged_purchase_price_currency: Optional[str] = "USD"
+    reversed: bool = False
+    reversed_at: Optional[datetime] = None
     merged_by_name: Optional[str] = None
     merged_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class ParcelMasterFinalOut(ParcelMasterOut):
+    """Computed view: base parcel values + all active merge logs applied."""
+    merged_lots: list[str] = []  # lot numbers absorbed into this parcel
 
 
 # ── Parcel Purchase ─────────────────────────────────────

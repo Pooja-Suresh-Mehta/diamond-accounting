@@ -249,7 +249,7 @@ export default function SalePage() {
       if (isEditMode) await api.put(`/sale/${id}`, payload);
       else await api.post('/sale', payload);
       toast.success(isEditMode ? 'Updated' : 'Created');
-      navigate('/parcel/sale', { replace: true });
+      navigate('/parcel-transaction/sale', { replace: true });
     } catch (e) {
       toast.error(e?.response?.data?.detail || 'Save failed');
     } finally {
@@ -270,7 +270,7 @@ export default function SalePage() {
           <h1 className="text-2xl font-bold text-gray-800">Parcel Transactions / Sale</h1>
           <div className="flex gap-2">
             <button onClick={exportExcel} className="px-3 py-2 text-sm bg-gray-200 rounded-lg flex items-center gap-1.5"><Download className="w-4 h-4" /> Export Excel</button>
-            <button onClick={() => { navigate('/parcel/sale/add'); }} className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg flex items-center gap-1.5"><Plus className="w-4 h-4" /> Create Sale</button>
+            <button onClick={() => { navigate('/parcel-transaction/sale/add'); }} className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg flex items-center gap-1.5"><Plus className="w-4 h-4" /> Create Sale</button>
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
@@ -291,7 +291,7 @@ export default function SalePage() {
                   <tr key={r.id} className="border-t border-gray-100">
                     <td className="px-3 py-2">
                       <div className="flex gap-2">
-                        <button onClick={() => navigate(`/parcel/sale/edit/${r.id}`)} className="text-blue-600">Edit</button>
+                        <button onClick={() => navigate(`/parcel-transaction/sale/edit/${r.id}`)} className="text-blue-600">Edit</button>
                         <button onClick={() => removeRow(r.id)} className="text-red-600"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>

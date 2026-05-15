@@ -23,7 +23,6 @@ import IncomeExpensePage from './pages/IncomeExpensePage';
 import ParcelReportsHub from './pages/reports/ParcelReportsHub';
 import FinancialReportsHub from './pages/reports/FinancialReportsHub';
 import UtilitiesPage from './pages/UtilitiesPage';
-import ParcelModulePage from './pages/ParcelModulePage';
 import UsersPage from './pages/UsersPage';
 import BackupRestorePage from './pages/BackupRestorePage';
 import ManageDropdownsPage from './pages/ManageDropdownsPage';
@@ -92,32 +91,32 @@ function AppRoutes() {
         <Route path="parcel-master" element={<ParcelMasterPage />} />
         <Route path="parcel-master/add" element={<ParcelMasterPage />} />
         <Route path="parcel-master/edit/:id" element={<ParcelMasterPage />} />
-        <Route path="parcel" element={<ParcelModulePage />}>
-          <Route path="purchase" element={<PurchasePage />} />
-          <Route path="purchase/add" element={<PurchasePage />} />
-          <Route path="purchase/edit/:id" element={<PurchasePage />} />
-          <Route path="purchase-return" element={<PurchaseReturnPage />} />
-          <Route path="purchase-return/add" element={<PurchaseReturnPage />} />
-          <Route path="purchase-return/edit/:id" element={<PurchaseReturnPage />} />
-          <Route path="consignment-in" element={<ConsignmentPage />} />
-          <Route path="consignment-in/add" element={<ConsignmentPage />} />
-          <Route path="consignment-in/edit/:id" element={<ConsignmentPage />} />
-          <Route path="consignment-in-return" element={<ConsignmentReturnPage />} />
-          <Route path="consignment-in-return/add" element={<ConsignmentReturnPage />} />
-          <Route path="consignment-in-return/edit/:id" element={<ConsignmentReturnPage />} />
-          <Route path="memo-out" element={<MemoOutPage />} />
-          <Route path="memo-out/add" element={<MemoOutPage />} />
-          <Route path="memo-out/edit/:id" element={<MemoOutPage />} />
-          <Route path="memo-out-return" element={<MemoOutReturnPage />} />
-          <Route path="memo-out-return/add" element={<MemoOutReturnPage />} />
-          <Route path="memo-out-return/edit/:id" element={<MemoOutReturnPage />} />
-          <Route path="sale" element={<SalePage />} />
-          <Route path="sale/add" element={<SalePage />} />
-          <Route path="sale/edit/:id" element={<SalePage />} />
-          <Route path="sale-return" element={<SaleReturnPage />} />
-          <Route path="sale-return/add" element={<SaleReturnPage />} />
-          <Route path="sale-return/edit/:id" element={<SaleReturnPage />} />
-        </Route>
+        
+        {/* Parcel Transactions */}
+        <Route path="parcel-transaction/purchase" element={<PurchasePage />} />
+        <Route path="parcel-transaction/purchase/add" element={<PurchasePage />} />
+        <Route path="parcel-transaction/purchase/edit/:id" element={<PurchasePage />} />
+        <Route path="parcel-transaction/purchase-return" element={<PurchaseReturnPage />} />
+        <Route path="parcel-transaction/purchase-return/add" element={<PurchaseReturnPage />} />
+        <Route path="parcel-transaction/purchase-return/edit/:id" element={<PurchaseReturnPage />} />
+        <Route path="parcel-transaction/consignment-in" element={<ConsignmentPage />} />
+        <Route path="parcel-transaction/consignment-in/add" element={<ConsignmentPage />} />
+        <Route path="parcel-transaction/consignment-in/edit/:id" element={<ConsignmentPage />} />
+        <Route path="parcel-transaction/consignment-in-return" element={<ConsignmentReturnPage />} />
+        <Route path="parcel-transaction/consignment-in-return/add" element={<ConsignmentReturnPage />} />
+        <Route path="parcel-transaction/consignment-in-return/edit/:id" element={<ConsignmentReturnPage />} />
+        <Route path="parcel-transaction/memo-out" element={<MemoOutPage />} />
+        <Route path="parcel-transaction/memo-out/add" element={<MemoOutPage />} />
+        <Route path="parcel-transaction/memo-out/edit/:id" element={<MemoOutPage />} />
+        <Route path="parcel-transaction/memo-out-return" element={<MemoOutReturnPage />} />
+        <Route path="parcel-transaction/memo-out-return/add" element={<MemoOutReturnPage />} />
+        <Route path="parcel-transaction/memo-out-return/edit/:id" element={<MemoOutReturnPage />} />
+        <Route path="parcel-transaction/sale" element={<SalePage />} />
+        <Route path="parcel-transaction/sale/add" element={<SalePage />} />
+        <Route path="parcel-transaction/sale/edit/:id" element={<SalePage />} />
+        <Route path="parcel-transaction/sale-return" element={<SaleReturnPage />} />
+        <Route path="parcel-transaction/sale-return/add" element={<SaleReturnPage />} />
+        <Route path="parcel-transaction/sale-return/edit/:id" element={<SaleReturnPage />} />
 
         {/* Financial Transactions */}
         <Route path="financial/loan-given" element={<LoanPage loanType="Given" />} />

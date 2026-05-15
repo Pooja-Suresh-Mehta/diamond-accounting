@@ -1,6 +1,6 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
-import { LayoutDashboard, LogOut, Diamond, Menu, X, BookOpenText, FolderTree, ChevronDown, ChevronRight, Moon, Sun, Boxes, Banknote, BarChart2, Wrench, Users, HardDrive, ListChecks, Power } from 'lucide-react';
+import { LayoutDashboard, LogOut, Diamond, Menu, X, BookOpenText, FolderTree, ChevronDown, ChevronRight, Moon, Sun, Banknote, BarChart2, Wrench, Users, HardDrive, ListChecks, Power } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const navItems = [
@@ -22,7 +22,6 @@ const PARCEL_REPORT_TABS = [
 
 function ParcelReportLinks({ onNav }) {
   const location = useLocation();
-  const navigate = useNavigate();
   const isReportPage = location.pathname === '/reports/parcel';
   const currentTab = isReportPage ? (new URLSearchParams(location.search).get('tab') || 'stock') : null;
 
@@ -31,13 +30,14 @@ function ParcelReportLinks({ onNav }) {
       {PARCEL_REPORT_TABS.map((item) => {
         const active = currentTab === item.tab;
         return (
-          <button
+          <NavLink
             key={item.tab}
-            onClick={() => { navigate(`/reports/parcel?tab=${item.tab}`); onNav(); }}
-            className={`block w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${active ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
+            to={`/reports/parcel?tab=${item.tab}`}
+            onClick={onNav}
+            className={() => `block px-3 py-2 rounded-lg text-sm transition-colors ${active ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
           >
             {item.label}
-          </button>
+          </NavLink>
         );
       })}
     </div>
@@ -49,7 +49,6 @@ export default function Layout() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [mastersOpen, setMastersOpen] = useState(true);
-  const [parcelOpen, setParcelOpen] = useState(true);
   const [parcelTxnOpen, setParcelTxnOpen] = useState(true);
   const [parcelRptOpen, setParcelRptOpen] = useState(false);
   const [financialOpen, setFinancialOpen] = useState(false);
@@ -146,60 +145,47 @@ export default function Layout() {
           )}
           <button
             type="button"
-            onClick={() => setParcelOpen((v) => !v)}
+            onClick={() => setParcelTxnOpen((v) => !v)}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white"
           >
-            <Boxes className="w-5 h-5" />
-            <span className="flex-1 text-left">Parcel</span>
-            {parcelOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            <BookOpenText className="w-5 h-5" />
+            <span className="flex-1 text-left">Parcel Transactions</span>
+            {parcelTxnOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
-          {parcelOpen && (
+          {parcelTxnOpen && (
             <div className="ml-4 space-y-1">
-              <button
-                type="button"
-                onClick={() => setParcelTxnOpen((v) => !v)}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-gray-300 hover:bg-gray-800 hover:text-white"
-              >
-                <BookOpenText className="w-4 h-4" />
-                <span className="flex-1 text-left">Parcel Transactions</span>
-                {parcelTxnOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-              </button>
-              {parcelTxnOpen && (
-                <div className="ml-4 space-y-1">
-                  {[
-                    { to: '/parcel/purchase', label: 'Purchase' },
-                    { to: '/parcel/purchase-return', label: 'Purchase Return' },
-                    { to: '/parcel/consignment-in', label: 'Consignment In' },
-                    { to: '/parcel/consignment-in-return', label: 'Consignment In Return' },
-                    { to: '/parcel/memo-out', label: 'Memo Out' },
-                    { to: '/parcel/memo-out-return', label: 'Memo Out Return' },
-                    { to: '/parcel/sale', label: 'Sale' },
-                    { to: '/parcel/sale-return', label: 'Sale Return' },
-                  ].map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      onClick={() => setSidebarOpen(false)}
-                      className={({ isActive }) => `block px-3 py-2 rounded-lg text-sm transition-colors ${isActive ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
-                    >
-                      {item.label}
-                    </NavLink>
-                  ))}
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => setParcelRptOpen((v) => !v)}
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-gray-300 hover:bg-gray-800 hover:text-white"
-              >
-                <BarChart2 className="w-4 h-4" />
-                <span className="flex-1 text-left">Parcel Reports</span>
-                {parcelRptOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-              </button>
-              {parcelRptOpen && (
-                <ParcelReportLinks onNav={() => setSidebarOpen(false)} />
-              )}
+              {[
+                { to: '/parcel-transaction/purchase', label: 'Purchase' },
+                { to: '/parcel-transaction/purchase-return', label: 'Purchase Return' },
+                { to: '/parcel-transaction/consignment-in', label: 'Consignment In' },
+                { to: '/parcel-transaction/consignment-in-return', label: 'Consignment In Return' },
+                { to: '/parcel-transaction/memo-out', label: 'Memo Out' },
+                { to: '/parcel-transaction/memo-out-return', label: 'Memo Out Return' },
+                { to: '/parcel-transaction/sale', label: 'Sale' },
+                { to: '/parcel-transaction/sale-return', label: 'Sale Return' },
+              ].map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setSidebarOpen(false)}
+                  className={({ isActive }) => `block px-3 py-2 rounded-lg text-sm transition-colors ${isActive ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800 hover:text-white'}`}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
             </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setParcelRptOpen((v) => !v)}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white"
+          >
+            <BarChart2 className="w-5 h-5" />
+            <span className="flex-1 text-left">Parcel Reports</span>
+            {parcelRptOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+          {parcelRptOpen && (
+            <ParcelReportLinks onNav={() => setSidebarOpen(false)} />
           )}
 
           {/* Financial Transactions */}

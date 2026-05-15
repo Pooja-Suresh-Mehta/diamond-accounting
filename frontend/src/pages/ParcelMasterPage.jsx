@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Plus, Save, Pencil, Trash2, GitMerge, RotateCcw } from 'lucide-react';
+import { Plus, Save, Pencil, Trash2, GitMerge, Eye, X } from 'lucide-react';
 import api from '../api';
 import ListPageControls from '../components/ListPageControls';
 import CreatableField from '../components/CreatableField';
@@ -128,16 +128,22 @@ export default function ParcelMasterPage() {
     stock_types: ['Natural Diamond', 'Gem Stone'], stock_subtypes: ['Polished', 'Makeable'], grown_process_types: ['Natural'],
   });
 
-  // Merge log tab
-  const [activeTab, setActiveTab] = useState('list');
+  // Tabs: 'final' (default) | 'manual' | 'merge-log'
+  const [activeTab, setActiveTab] = useState('final');
   const [mergeLogs, setMergeLogs] = useState([]);
   const [loadingMergeLogs, setLoadingMergeLogs] = useState(false);
+  const [viewRow, setViewRow] = useState(null); // row from final view to display read-only
 
   // ── Data loaders ───────────────────────────────────────
-  const loadRows = async () => {
-    // Pass page_size=500 so all records come back; client-side pagination handles the rest
-    const res = await api.get('/parcel-master', { params: { search, page_size: 500 } });
-    setRows(Array.isArray(res.data) ? res.data : []);
+  const loadRows = async (tab) => {
+    const t = tab || activeTab;
+    if (t === 'final') {
+      const res = await api.get('/parcel-master/final', { params: { search, page_size: 500 } });
+      setRows(Array.isArray(res.data) ? res.data : []);
+    } else if (t === 'manual') {
+      const res = await api.get('/parcel-master', { params: { search, page_size: 500, include_merged: true } });
+      setRows(Array.isArray(res.data) ? res.data : []);
+    }
     setPage(1);
   };
   const loadOpts = async () => {
@@ -171,8 +177,8 @@ export default function ParcelMasterPage() {
     loadSizeSieveMap();
   }, []);
   useEffect(() => {
-    if (!isFormMode) loadRows().catch(() => toast.error('Failed to load parcel list'));
-  }, [search, isFormMode]);
+    if (!isFormMode && activeTab !== 'merge-log') loadRows().catch(() => toast.error('Failed to load parcel list'));
+  }, [search, isFormMode, activeTab]);
   useEffect(() => {
     if (isEditMode) loadEdit().catch(() => toast.error('Failed to load parcel item'));
     if (isAddMode) {
@@ -288,13 +294,28 @@ export default function ParcelMasterPage() {
   const handleMerge = async () => {
     if (!mergeState) return;
     setSaving(true);
+    let createdParcelId = null;
     try {
-      const params = mergeState.isEditMerge ? { source_parcel_id: id } : {};
+      let params;
+      if (mergeState.isEditMerge) {
+        // Edit mode: the parcel being edited (id) is the absorbed one
+        params = { source_parcel_id: id };
+      } else {
+        // Add mode: the new entry doesn't exist in DB yet — create it first so it gets a proper
+        // parcel_masters row (visible in Manual Entries), then merge using its DB id.
+        const { data: newParcel } = await api.post('/parcel-master', mergeState.payload);
+        createdParcelId = newParcel.id;
+        params = { source_parcel_id: createdParcelId };
+      }
       await api.post(`/parcel-master/merge/${mergeState.existing.id}`, mergeState.payload, { params });
       toast.success('Merged with existing entry');
       setMergeState(null);
       navigate('/parcel-master', { replace: true });
     } catch (e) {
+      // If we created the parcel but merge failed, clean it up to avoid orphaned entries
+      if (createdParcelId) {
+        try { await api.delete(`/parcel-master/${createdParcelId}`); } catch {}
+      }
       toast.error(e?.response?.data?.detail || 'Merge failed');
     } finally {
       setSaving(false);
@@ -333,7 +354,7 @@ export default function ParcelMasterPage() {
   };
 
   const handleUnmerge = async (logId, survivingLot, mergedLot) => {
-    if (!confirm(`Unmerge Lot#${mergedLot} from Lot#${survivingLot}? This restores the merged entry and subtracts its values.`)) return;
+    if (!confirm(`Unmerge Lot#${mergedLot} from Lot#${survivingLot}? The absorbed lot will reappear in Manual Entries with its original values intact.`)) return;
     try {
       await api.post(`/parcel-master/unmerge/${logId}`);
       toast.success(`Unmerged: Lot#${mergedLot} restored`);
@@ -360,21 +381,37 @@ export default function ParcelMasterPage() {
         {/* Tabs */}
         <div className="flex gap-1 border-b border-gray-200">
           <button
-            onClick={() => setActiveTab('list')}
-            className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${activeTab === 'list' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+            onClick={() => setActiveTab('final')}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${activeTab === 'final' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
-            Parcel List
+            Final View
+          </button>
+          <button
+            onClick={() => setActiveTab('manual')}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors ${activeTab === 'manual' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            Manual Entries
           </button>
           <button
             onClick={() => { setActiveTab('merge-log'); loadMergeLogs(); }}
             className={`px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition-colors flex items-center gap-1.5 ${activeTab === 'merge-log' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
-            <GitMerge className="w-3.5 h-3.5" /> Merge Log
+            <GitMerge className="w-3.5 h-3.5" /> Merge History
           </button>
         </div>
 
-        {activeTab === 'list' && (
+        {(activeTab === 'final' || activeTab === 'manual') && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            {activeTab === 'final' && (
+              <p className="text-xs text-blue-700 bg-blue-50 rounded px-3 py-1.5 mb-3">
+                <strong>Final View:</strong> Shows computed values — base entry + all active merges applied. Absorbed lots are excluded. Values in this view are never stored directly.
+              </p>
+            )}
+            {activeTab === 'manual' && (
+              <p className="text-xs text-gray-600 bg-gray-50 rounded px-3 py-1.5 mb-3">
+                <strong>Manual Entries:</strong> Raw entries exactly as entered. Absorbed lots are shown greyed out. Only you (via Edit) can change these values — the app never modifies them.
+              </p>
+            )}
             <ListPageControls
               search={search}
               onSearchChange={setSearch}
@@ -389,7 +426,7 @@ export default function ParcelMasterPage() {
               <table className="min-w-full text-sm">
                 <thead className="bg-gray-50 text-gray-600">
                   <tr>
-                    <th className="text-left px-3 py-2">Edit</th>
+                    <th className="text-left px-3 py-2">{activeTab === 'final' ? 'View' : 'Edit'}</th>
                     <th className="text-left px-3 py-2">Delete</th>
                     <th className="text-left px-3 py-2">LotNo</th>
                     <th className="text-left px-3 py-2">ItemName</th>
@@ -409,26 +446,53 @@ export default function ParcelMasterPage() {
                         >{askingCurrency}</button>
                       </div>
                     </th>
+                    {activeTab === 'final' && <th className="text-left px-3 py-2">Merged Lots</th>}
+                    {activeTab === 'manual' && <th className="text-left px-3 py-2">Status</th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {tableRows.map((r) => (
-                    <tr key={r.id} className="border-t border-gray-100">
-                      <td className="px-3 py-2"><button onClick={() => navigate(`/parcel-master/edit/${r.id}`)} className="text-blue-600"><Pencil className="w-4 h-4" /></button></td>
-                      <td className="px-3 py-2"><button onClick={() => removeRow(r.id)} className="text-red-600"><Trash2 className="w-4 h-4" /></button></td>
-                      <td className="px-3 py-2">{r.lot_no}</td>
-                      <td className="px-3 py-2">{r.item_name}</td>
-                      <td className="px-3 py-2">{r.shape}</td>
-                      <td className="px-3 py-2">{r.color}</td>
-                      <td className="px-3 py-2">{r.size}</td>
-                      <td className="px-3 py-2">{r.clarity}</td>
-                      <td className="px-3 py-2">{r.sieve_mm}</td>
-                      <td className="px-3 py-2">{r.stock_group_id}</td>
-                      <td className="px-3 py-2 text-right">{fmtAmt(r.opening_weight_carats || 0)}</td>
-                      <td className="px-3 py-2 text-right">{fmtAmt(askingCurrency === 'INR' ? r.asking_price_inr_carats : r.asking_price_usd_carats)}</td>
-                    </tr>
-                  ))}
-                  {tableRows.length === 0 && <tr><td colSpan={12} className="text-center px-3 py-5 text-gray-500">No records found</td></tr>}
+                  {tableRows.map((r) => {
+                    const isAbsorbed = !!r.merged_into_lot_no;
+                    return (
+                      <tr key={r.id} className={`border-t border-gray-100 ${isAbsorbed ? 'opacity-50 bg-gray-50' : ''}`}>
+                        <td className="px-3 py-2">
+                          {activeTab === 'final'
+                            ? <button onClick={() => setViewRow(r)} className="text-blue-500 hover:text-blue-700"><Eye className="w-4 h-4" /></button>
+                            : <button onClick={() => navigate(`/parcel-master/edit/${r.id}`)} className="text-blue-600"><Pencil className="w-4 h-4" /></button>
+                          }
+                        </td>
+                        <td className="px-3 py-2"><button onClick={() => removeRow(r.id)} className="text-red-600"><Trash2 className="w-4 h-4" /></button></td>
+                        <td className="px-3 py-2 font-medium">{r.lot_no}</td>
+                        <td className="px-3 py-2">{r.item_name}</td>
+                        <td className="px-3 py-2">{r.shape}</td>
+                        <td className="px-3 py-2">{r.color}</td>
+                        <td className="px-3 py-2">{r.size}</td>
+                        <td className="px-3 py-2">{r.clarity}</td>
+                        <td className="px-3 py-2">{r.sieve_mm}</td>
+                        <td className="px-3 py-2">{r.stock_group_id}</td>
+                        <td className="px-3 py-2 text-right">{fmtAmt(r.opening_weight_carats || 0)}</td>
+                        <td className="px-3 py-2 text-right">{fmtAmt(askingCurrency === 'INR' ? r.asking_price_inr_carats : r.asking_price_usd_carats)}</td>
+                        {activeTab === 'final' && (
+                          <td className="px-3 py-2">
+                            {r.merged_lots?.length > 0 && (
+                              <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                                +{r.merged_lots.join(', ')}
+                              </span>
+                            )}
+                          </td>
+                        )}
+                        {activeTab === 'manual' && (
+                          <td className="px-3 py-2">
+                            {isAbsorbed
+                              ? <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">→ {r.merged_into_lot_no}</span>
+                              : <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Active</span>
+                            }
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                  {tableRows.length === 0 && <tr><td colSpan={13} className="text-center px-3 py-5 text-gray-500">No records found</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -437,7 +501,7 @@ export default function ParcelMasterPage() {
 
         {activeTab === 'merge-log' && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <p className="text-sm text-gray-500 mb-3">All past merges. Use Unmerge to undo an incorrect merge — the absorbed entry will be restored with its original lot number.</p>
+          <p className="text-sm text-gray-500 mb-3">All merge events. Unmerge restores the absorbed lot's <code>merged_into_lot_no</code> flag — no values are modified. Reversed merges are shown greyed out.</p>
             {loadingMergeLogs ? (
               <div className="py-10 text-center text-gray-400 text-sm">Loading...</div>
             ) : (
@@ -445,7 +509,6 @@ export default function ParcelMasterPage() {
                 <table className="min-w-full text-sm">
                   <thead className="bg-gray-50 text-gray-600">
                     <tr>
-                      <th className="text-left px-3 py-2">Unmerge</th>
                       <th className="text-left px-3 py-2">Surviving Lot</th>
                       <th className="text-left px-3 py-2">Merged Lot</th>
                       <th className="text-right px-3 py-2">Merged Weight</th>
@@ -457,15 +520,7 @@ export default function ParcelMasterPage() {
                   </thead>
                   <tbody>
                     {mergeLogs.map((log) => (
-                      <tr key={log.id} className="border-t border-gray-100">
-                        <td className="px-3 py-2">
-                          <button
-                            onClick={() => handleUnmerge(log.id, log.surviving_lot_no, log.merged_lot_no)}
-                            className="flex items-center gap-1 text-amber-600 hover:text-amber-700 text-xs font-medium"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" /> Unmerge
-                          </button>
-                        </td>
+                      <tr key={log.id} className={`border-t border-gray-100 ${log.reversed ? 'opacity-40' : ''}`}>
                         <td className="px-3 py-2 font-medium">{log.surviving_lot_no}</td>
                         <td className="px-3 py-2 text-blue-700">{log.merged_lot_no}</td>
                         <td className="px-3 py-2 text-right">{fmtAmt(log.merged_weight)}</td>
@@ -484,6 +539,118 @@ export default function ParcelMasterPage() {
             )}
           </div>
         )}
+      {/* ── Final View read-only detail modal ── */}
+      {viewRow && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl my-8">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">Lot #{viewRow.lot_no} — Final View</h2>
+                <p className="text-xs text-blue-700 mt-0.5">
+                  Computed values: base entry{viewRow.merged_lots?.length > 0 && ` + merged lots (${viewRow.merged_lots.join(', ')})`}. Read-only — edit via Manual Entries tab.
+                </p>
+              </div>
+              <button onClick={() => setViewRow(null)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5">
+              {/* Identity fields */}
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+                {[['Stock ID/LotNo', viewRow.lot_no], ['Shape', viewRow.shape], ['Color', viewRow.color],
+                  ['Clarity', viewRow.clarity], ['Size', viewRow.size], ['Sieve/MM', viewRow.sieve_mm],
+                  ['Stock Name', viewRow.item_name], ['Stock Group', viewRow.stock_group_id]].map(([label, val]) => (
+                  <div key={label} className="space-y-1">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
+                    <p className="px-3 py-2 text-sm bg-gray-100 rounded-md text-gray-800 min-h-[36px]">{val || '—'}</p>
+                  </div>
+                ))}
+                <div className="xl:col-span-2 space-y-1">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Description</p>
+                  <p className="px-3 py-2 text-sm bg-gray-100 rounded-md text-gray-800 min-h-[52px] whitespace-pre-wrap">{viewRow.description || '—'}</p>
+                </div>
+              </div>
+
+              {/* Classification */}
+              <div className="border-t pt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[['Stock Type', viewRow.stock_type], ['Stock SubType', viewRow.stock_subtype], ['Grown/Process Type', viewRow.grown_process_type]].map(([label, val]) => (
+                  <div key={label} className="space-y-1">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
+                    <p className="px-3 py-2 text-sm bg-gray-100 rounded-md text-gray-800">{val || '—'}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Pricing */}
+              <div className="border-t pt-4 space-y-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Opening Weight (ct)</p>
+                    <p className="px-3 py-2 text-sm bg-gray-100 rounded-md text-gray-800 font-semibold">{fmtAmt(viewRow.opening_weight_carats)}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Purchase Price</p>
+                    <p className="px-3 py-2 text-sm bg-gray-100 rounded-md text-gray-800">
+                      {fmtAmt(viewRow.purchase_price)} <span className="text-xs text-gray-500">{viewRow.purchase_price_currency}</span>
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">USD to INR Rate</p>
+                    <p className="px-3 py-2 text-sm bg-gray-100 rounded-md text-gray-800">{fmtAmt(viewRow.usd_to_inr_rate)}</p>
+                  </div>
+                </div>
+
+                <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                  <div className="flex-1 p-4 bg-amber-50/40">
+                    <div className="text-xs font-bold text-amber-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> INR
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      {[['Cost INR Amount', viewRow.purchase_cost_inr_amount], ['Cost INR/Carat', viewRow.purchase_cost_inr_carat],
+                        ['Asking INR/Carat', viewRow.asking_price_inr_carats], ['Asking INR Amount', viewRow.asking_inr_amount]].map(([label, val]) => (
+                        <div key={label} className="space-y-1">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
+                          <p className="px-3 py-2 text-sm bg-white border border-amber-100 rounded-md text-gray-800">{fmtAmt(val)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="w-px bg-gray-300 self-stretch" />
+                  <div className="flex-1 p-4 bg-emerald-50/40">
+                    <div className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" /> USD
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      {[['Cost USD Amount', viewRow.purchase_cost_usd_amount], ['Cost USD/Carat', viewRow.purchase_cost_usd_carat],
+                        ['Asking USD/Carat', viewRow.asking_price_usd_carats], ['Asking USD Amount', viewRow.asking_usd_amount]].map(([label, val]) => (
+                        <div key={label} className="space-y-1">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{label}</p>
+                          <p className="px-3 py-2 text-sm bg-white border border-emerald-100 rounded-md text-gray-800">{fmtAmt(val)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {viewRow.merged_lots?.length > 0 && (
+                <div className="border-t pt-4">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Absorbed Lots</p>
+                  <div className="flex flex-wrap gap-2">
+                    {viewRow.merged_lots.map((lot) => (
+                      <span key={lot} className="px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-semibold">Lot #{lot}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+              <button onClick={() => setViewRow(null)} className="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     );
   }
@@ -571,6 +738,7 @@ export default function ParcelMasterPage() {
                   value={form.purchase_price}
                   onChange={setValue}
                   className="flex-1 min-w-0 px-3 py-2 text-sm border border-r-0 border-gray-300 rounded-l-md focus:ring-1 focus:ring-blue-500 outline-none"
+                  forceDecimal
                 />
                 <select
                   value={form.purchase_price_currency}

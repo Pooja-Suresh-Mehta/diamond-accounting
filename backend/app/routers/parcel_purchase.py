@@ -14,10 +14,28 @@ from app.database import get_db
 from app.models.models import AccountMaster, ParcelMaster, ParcelPurchase, ParcelPurchaseItem, User
 from app.schemas import ParcelPurchaseCreate, ParcelPurchaseOut, ParcelPurchaseUpdate
 from app.utils import (
-    CATEGORIES, CURRENCIES, CURRENCY_RATES, PAYMENT_STATUSES, PURCHASE_TYPES, SUB_TYPES,
-    adjust_parcel_stock, ensure_unique, get_actor_name, next_number,
+    CATEGORIES, CURRENCIES, CURRENCY_RATES, PAYMENT_STATUSES, PURCHASE_TYPES, SUB_TYPES, ensure_unique, get_actor_name, next_number,
     parse_date_value, parse_float_value, post_ledger_entries, reverse_ledger_entries,
 )
+
+async def _validate_lot_numbers(db: AsyncSession, company_id: str, items: list):
+    """Ensure every purchase item references an existing parcel master lot."""
+    lot_numbers = [str(i.lot_number).strip() for i in items if getattr(i, "lot_number", None) and str(i.lot_number).strip()]
+    if not lot_numbers:
+        return
+    existing = (await db.execute(
+        select(ParcelMaster.lot_no).where(
+            ParcelMaster.company_id == company_id,
+            func.lower(ParcelMaster.lot_no).in_([ln.lower() for ln in lot_numbers]),
+        )
+    )).scalars().all()
+    existing_lower = {ln.lower() for ln in existing}
+    missing = [ln for ln in lot_numbers if ln.lower() not in existing_lower]
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Lot number(s) not found in Parcel Master: {', '.join(missing)}. Please create the parcel entry first.",
+        )
 
 router = APIRouter(prefix="/api/parcel/purchase", tags=["parcel-purchase"])
 
@@ -35,83 +53,6 @@ def _norm_header(v: str) -> str:
     return "".join(ch for ch in (v or "").strip().lower() if ch.isalnum())
 
 
-async def _upsert_parcel_items(
-    db: AsyncSession,
-    *,
-    company_id: str,
-    created_by_name: str,
-    items: list,
-    inr_rate: float = 85,
-):
-    def _apply_first_purchase_costs(row: ParcelMaster, item):
-        if float(row.purchase_cost_usd_carat or 0) > 0:
-            return
-        issue_carats = float(item.issue_carats or 0)
-        rate_usd_per_carat = float(item.rate or 0)
-        if issue_carats <= 0 or rate_usd_per_carat <= 0:
-            return
-        selected_inr_rate = float(inr_rate or 0)
-        purchase_cost_usd_amount = rate_usd_per_carat * issue_carats
-        purchase_cost_inr_amount = purchase_cost_usd_amount * selected_inr_rate
-        asking_price_usd_carats = selected_inr_rate * issue_carats
-        asking_usd_amount = asking_price_usd_carats * issue_carats
-        asking_price_inr_carats = asking_price_usd_carats * selected_inr_rate
-
-        row.usd_to_inr_rate = selected_inr_rate
-        row.purchase_cost_usd_carat = rate_usd_per_carat
-        row.purchase_cost_usd_amount = purchase_cost_usd_amount
-        row.purchase_cost_inr_carat = selected_inr_rate
-        row.purchase_cost_inr_amount = purchase_cost_inr_amount
-        row.asking_price_usd_carats = asking_price_usd_carats
-        row.asking_usd_amount = asking_usd_amount
-        row.asking_price_inr_carats = asking_price_inr_carats
-        row.asking_inr_amount = asking_usd_amount * selected_inr_rate
-
-    lot_numbers = [str(i.lot_number).strip() for i in items if getattr(i, "lot_number", None) and str(i.lot_number).strip()]
-    if not lot_numbers:
-        return
-    existing_rows = (await db.execute(
-        select(ParcelMaster).where(
-            ParcelMaster.company_id == company_id,
-            func.lower(ParcelMaster.lot_no).in_([ln.lower() for ln in lot_numbers]),
-        )
-    )).scalars().all()
-    existing = {r.lot_no.strip().lower(): r for r in existing_rows}
-
-    for item in items:
-        lot_no = (item.lot_number or "").strip()
-        if not lot_no:
-            continue
-        row = existing.get(lot_no.lower())
-        if row:
-            row.item_name = item.item_name or row.item_name
-            row.shape = item.shape or row.shape
-            row.color = item.color or row.color
-            row.clarity = item.clarity or row.clarity
-            row.size = item.size or row.size
-            row.sieve_mm = item.sieve or row.sieve_mm
-            row.opening_weight_carats = float(item.selected_carat or item.issue_carats or row.opening_weight_carats or 0)
-            row.asking_inr_amount = float(item.amount or row.asking_inr_amount or 0)
-            _apply_first_purchase_costs(row, item)
-            continue
-
-        if not (item.shape and item.size):
-            continue
-        new_row = ParcelMaster(
-            company_id=company_id,
-            lot_no=lot_no,
-            item_name=item.item_name or lot_no,
-            shape=item.shape,
-            color=item.color,
-            clarity=item.clarity,
-            size=item.size,
-            sieve_mm=item.sieve,
-            opening_weight_carats=float(item.selected_carat or item.issue_carats or 0),
-            asking_inr_amount=float(item.amount or 0),
-            created_by_name=created_by_name,
-        )
-        _apply_first_purchase_costs(new_row, item)
-        db.add(new_row)
 
 
 # ── Fixed route ordering: static paths BEFORE /{id} ─────
@@ -136,7 +77,10 @@ async def get_purchase_options(
         .order_by(AccountMaster.account_group_name)
     )).scalars().all()
     parcel_rows = (await db.execute(
-        select(ParcelMaster).where(ParcelMaster.company_id == current_user.company_id).order_by(ParcelMaster.lot_no)
+        select(ParcelMaster).where(
+            ParcelMaster.company_id == current_user.company_id,
+            ParcelMaster.merged_into_lot_no == None,  # noqa: E711 — only active (non-absorbed) lots
+        ).order_by(ParcelMaster.lot_no)
     )).scalars().all()
     next_inv = await next_number(db, ParcelPurchase, ParcelPurchase.invoice_number, current_user.company_id)
     return {
@@ -247,6 +191,7 @@ async def create_purchase(
     db: AsyncSession = Depends(get_db),
 ):
     await ensure_unique(db, ParcelPurchase, ParcelPurchase.invoice_number, current_user.company_id, payload.invoice_number, label="Invoice Number")
+    await _validate_lot_numbers(db, current_user.company_id, payload.items)
     data = payload.model_dump(exclude={"items"})
     row = ParcelPurchase(company_id=current_user.company_id, **data)
     row.created_by_name = get_actor_name(current_user)
@@ -254,8 +199,6 @@ async def create_purchase(
     _calc_totals(row)
     db.add(row)
 
-    await _upsert_parcel_items(db, company_id=current_user.company_id, created_by_name=get_actor_name(current_user), items=payload.items, inr_rate=payload.inr_rate)
-    await adjust_parcel_stock(db, company_id=current_user.company_id, items=payload.items, operation="purchase")
 
     await db.flush()
     # Ledger: Debit Purchase, Credit Supplier
@@ -288,9 +231,9 @@ async def update_purchase(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Purchase not found")
 
     await ensure_unique(db, ParcelPurchase, ParcelPurchase.invoice_number, current_user.company_id, payload.invoice_number, exclude_id=str(purchase_id), label="Invoice Number")
+    await _validate_lot_numbers(db, current_user.company_id, payload.items)
 
     # Reverse old stock
-    await adjust_parcel_stock(db, company_id=current_user.company_id, items=row.items, operation="purchase_reverse")
     await reverse_ledger_entries(db, company_id=current_user.company_id, transaction_id=str(purchase_id))
 
     data = payload.model_dump(exclude={"items"})
@@ -300,8 +243,6 @@ async def update_purchase(
     row.items.extend([ParcelPurchaseItem(**item.model_dump()) for item in payload.items])
     _calc_totals(row)
 
-    await _upsert_parcel_items(db, company_id=current_user.company_id, created_by_name=get_actor_name(current_user), items=payload.items, inr_rate=payload.inr_rate)
-    await adjust_parcel_stock(db, company_id=current_user.company_id, items=payload.items, operation="purchase")
 
     # Re-post ledger
     amount = float(row.transaction_final_amount or row.total_amount or 0)
@@ -332,7 +273,6 @@ async def delete_purchase(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Purchase not found")
 
     # Reverse stock and ledger
-    await adjust_parcel_stock(db, company_id=current_user.company_id, items=row.items, operation="purchase_reverse")
     await reverse_ledger_entries(db, company_id=current_user.company_id, transaction_id=str(purchase_id))
 
     await db.delete(row)
@@ -475,9 +415,7 @@ async def import_purchase_excel(
                         "pcs": item.pcs, "rate": item.rate, "amount": item.amount,
                     })
             if all_items:
-                await _upsert_parcel_items(db, company_id=current_user.company_id, created_by_name=get_actor_name(current_user), items=all_items, inr_rate=85)
-                await adjust_parcel_stock(db, company_id=current_user.company_id, items=all_items, operation="purchase")
-            added = len(imported_rows)
+                        added = len(imported_rows)
 
     if errors:
         raise HTTPException(

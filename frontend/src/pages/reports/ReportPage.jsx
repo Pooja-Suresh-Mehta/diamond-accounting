@@ -11,6 +11,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Search, Columns } from 'lucide-react';
 import api from '../../api';
 import toast from 'react-hot-toast';
+import { fmtAmt } from '../../utils/format';
 
 export default function ReportPage({ title, endpoint, filters: filterDefs, columns, totalKeys = [], extraParams = {} }) {
   const initFilters = Object.fromEntries((filterDefs || []).map(f => [f.key, f.type === 'checkbox' ? false : '']));
@@ -56,8 +57,8 @@ export default function ReportPage({ title, endpoint, filters: filterDefs, colum
   const fmt = (col, row) => {
     const val = row[col.key];
     if (col.format) return col.format(val, row);
-    if (val === null || val === undefined) ';return '
-    if (typeof val === 'number') return val.toFixed ? val.toFixed(2) : val;
+    if (val === null || val === undefined) return '';
+    if (typeof val === 'number') return fmtAmt(val, 2);
     if (typeof val === 'boolean') return val ? 'Yes' : 'No';
     return String(val);
   };
@@ -194,7 +195,7 @@ export default function ReportPage({ title, endpoint, filters: filterDefs, colum
                         if (totalKeys.includes(c.key)) {
                           return (
                             <td key={c.key} className="px-3 py-2">
-                              {typeof totals[c.key] === 'number' ? totals[c.key].toFixed(2) : (totals[c.key] || '—')}
+                              {typeof totals[c.key] === 'number' ? fmtAmt(totals[c.key]) : (totals[c.key] || '—')}
                             </td>
                           );
                         }

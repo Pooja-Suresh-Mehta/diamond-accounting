@@ -10,8 +10,7 @@ from app.database import get_db
 from app.models.models import AccountMaster, ParcelMaster, SaleReturn, SaleReturnItem, User
 from app.schemas import SaleReturnCreate, SaleReturnOut, SaleReturnUpdate
 from app.utils import (
-    CATEGORIES, CURRENCIES, CURRENCY_RATES, PAYMENT_STATUSES, PURCHASE_TYPES, SUB_TYPES,
-    adjust_parcel_stock, ensure_unique, get_actor_name, next_number,
+    CATEGORIES, CURRENCIES, CURRENCY_RATES, PAYMENT_STATUSES, PURCHASE_TYPES, SUB_TYPES, ensure_unique, get_actor_name, next_number,
     post_ledger_entries, reverse_ledger_entries,
 )
 
@@ -107,7 +106,6 @@ async def create_row(
     db.add(row)
 
     # Sale return = stock comes back to us
-    await adjust_parcel_stock(db, company_id=current_user.company_id, items=payload.items, operation="sale_reverse")
 
     await db.flush()
     amount = float(row.transaction_final_amount or row.total_amount or 0)
@@ -140,7 +138,6 @@ async def update_row(
     await ensure_unique(db, SaleReturn, SaleReturn.invoice_number, current_user.company_id, payload.invoice_number, exclude_id=str(row_id), label="Invoice Number")
 
     # Reverse old adjustments (the old return had reduced sold_weight, undo that)
-    await adjust_parcel_stock(db, company_id=current_user.company_id, items=row.items, operation="sale")
     await reverse_ledger_entries(db, company_id=current_user.company_id, transaction_id=str(row_id))
 
     for k, v in payload.model_dump(exclude={"items"}).items():
@@ -149,7 +146,6 @@ async def update_row(
     row.items.extend([SaleReturnItem(**item.model_dump()) for item in payload.items])
     _calc_totals(row)
 
-    await adjust_parcel_stock(db, company_id=current_user.company_id, items=payload.items, operation="sale_reverse")
 
     amount = float(row.transaction_final_amount or row.total_amount or 0)
     party = row.party or "Unknown Customer"
@@ -179,7 +175,6 @@ async def delete_row(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sale Return not found")
 
     # Deleting a sale return means the sold stock goes back to "sold"
-    await adjust_parcel_stock(db, company_id=current_user.company_id, items=row.items, operation="sale")
     await reverse_ledger_entries(db, company_id=current_user.company_id, transaction_id=str(row_id))
 
     await db.delete(row)

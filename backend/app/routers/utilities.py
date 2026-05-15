@@ -14,7 +14,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.models import ParcelMaster, User
-from app.utils import adjust_parcel_stock
 
 router = APIRouter(prefix="/api/utilities", tags=["utilities"])
 
@@ -34,11 +33,11 @@ async def download_mrp(
 
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(['Lot #', 'Item', 'Shape', 'Color', 'Clarity', 'Size', 'On Hand Cts', 'Rate/Ct USD', 'Asking USD'])
+    writer.writerow(['Lot #', 'Item', 'Shape', 'Color', 'Clarity', 'Size', 'Opening Weight', 'Rate/Ct USD', 'Asking USD'])
     for r in rows:
         writer.writerow([
             r.lot_no, r.item_name, r.shape, r.color, r.clarity, r.size,
-            r.on_hand_weight, r.asking_price_usd_carats, r.asking_usd_amount,
+            r.opening_weight_carats, r.asking_price_usd_carats, r.asking_usd_amount,
         ])
     output.seek(0)
     return StreamingResponse(
@@ -124,8 +123,7 @@ async def import_solitaire_price(
             skipped += 1
             continue
         parcel.asking_price_usd_carats = float(rate)
-        if parcel.on_hand_weight:
-            parcel.asking_usd_amount = round(float(parcel.on_hand_weight) * float(rate), 2)
+        # Note: asking_usd_amount is a manual field — update only if explicitly needed
         updated += 1
     await db.commit()
     return {"updated": updated, "skipped": skipped}
@@ -170,7 +168,13 @@ async def stock_transfer(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Transfer weight/pcs from one parcel lot to another."""
+    """
+    Stock transfer: validates both lots exist.
+    Note: actual weight movement should be recorded via Sale (from source lot)
+    and Purchase (into destination lot) entries so the stock report reflects it correctly.
+    This endpoint is a dry-run/validation only.
+    """
+    from fastapi import HTTPException
     from_result = await db.execute(
         select(ParcelMaster).where(
             ParcelMaster.company_id == current_user.company_id,
@@ -179,7 +183,6 @@ async def stock_transfer(
     )
     from_parcel = from_result.scalar_one_or_none()
     if not from_parcel:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Source lot '{from_lot}' not found")
 
     to_result = await db.execute(
@@ -190,27 +193,14 @@ async def stock_transfer(
     )
     to_parcel = to_result.scalar_one_or_none()
     if not to_parcel:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Destination lot '{to_lot}' not found")
 
-    if (from_parcel.on_hand_weight or 0) < weight:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail="Insufficient on-hand weight in source lot")
-
-    # Deduct from source
-    from_parcel.on_hand_weight = round((from_parcel.on_hand_weight or 0) - weight, 4)
-    from_parcel.sold_weight = round((from_parcel.sold_weight or 0) + weight, 4)
-
-    # Add to destination
-    to_parcel.on_hand_weight = round((to_parcel.on_hand_weight or 0) + weight, 4)
-    to_parcel.purchased_weight = round((to_parcel.purchased_weight or 0) + weight, 4)
-
-    await db.commit()
     return {
-        "status": "ok",
-        "transferred_weight": weight,
+        "status": "validated",
+        "message": f"To complete transfer of {weight}ct from Lot#{from_lot} to Lot#{to_lot}, create a Sale entry for the source lot and a Purchase entry for the destination lot.",
         "from_lot": from_lot,
         "to_lot": to_lot,
+        "weight": weight,
     }
 
 
@@ -251,31 +241,11 @@ async def stock_telly(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Stock reconciliation — compares computed vs book on-hand weight."""
-    q = select(ParcelMaster).where(ParcelMaster.company_id == current_user.company_id)
-    rows = (await db.execute(q)).scalars().all()
-
-    results = [
-        {
-            "id": r.id,
-            "lot_no": r.lot_no,
-            "item_name": r.item_name,
-            "purchased_weight": float(r.purchased_weight or 0),
-            "sold_weight": float(r.sold_weight or 0),
-            "on_memo_weight": float(r.on_memo_weight or 0),
-            "consignment_weight": float(getattr(r, "consignment_weight", 0) or 0),
-            "on_hand_weight": float(r.on_hand_weight or 0),
-            "book_weight": float(r.on_hand_weight or 0),  # same source — extend if physical count added
-        }
-        for r in rows
-    ]
-
-    totals = {
-        "purchased_weight": round(sum(r["purchased_weight"] for r in results), 4),
-        "sold_weight": round(sum(r["sold_weight"] for r in results), 4),
-        "on_memo_weight": round(sum(r["on_memo_weight"] for r in results), 4),
-        "consignment_weight": round(sum(r["consignment_weight"] for r in results), 4),
-        "on_hand_weight": round(sum(r["on_hand_weight"] for r in results), 4),
+    """
+    Stock reconciliation — see /api/parcel-reports/stock for full on-the-fly stock report
+    including purchased/sold/memo/on-hand weights computed from transaction tables.
+    """
+    return {
+        "note": "Use /api/parcel-reports/stock for the full stock report. Stock counters are now computed on-the-fly from transaction tables.",
+        "as_of_date": str(as_of_date) if as_of_date else None,
     }
-
-    return {"results": results, "totals": totals}

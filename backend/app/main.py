@@ -85,14 +85,6 @@ async def health():
 
 
 _NEW_PARCEL_COLUMNS = {
-    "purchased_weight": "FLOAT DEFAULT 0",
-    "purchased_pcs": "INTEGER DEFAULT 0",
-    "sold_weight": "FLOAT DEFAULT 0",
-    "sold_pcs": "INTEGER DEFAULT 0",
-    "on_memo_weight": "FLOAT DEFAULT 0",
-    "on_memo_pcs": "INTEGER DEFAULT 0",
-    "consignment_weight": "FLOAT DEFAULT 0",
-    "consignment_pcs": "INTEGER DEFAULT 0",
     "purchase_price": "FLOAT DEFAULT 0",
     "purchase_price_currency": "VARCHAR(3) DEFAULT 'USD'",
 }

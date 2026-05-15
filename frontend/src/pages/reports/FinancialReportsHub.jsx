@@ -7,6 +7,7 @@ import { Search } from 'lucide-react';
 import api from '../../api';
 import toast from 'react-hot-toast';
 import ReportPage from './ReportPage';
+import { fmtAmt } from '../../utils/format';
 
 const CURRENCIES = ['USD', 'INR', 'AED'];
 const TYPE_OPTIONS = ['LOCAL', 'IMPORT', 'EXPORT'];
@@ -125,7 +126,7 @@ function SalePurchaseSummary() {
             ].map(({ label, value, highlight }) => (
               <div key={label} className={`bg-white border rounded-lg p-4 ${highlight ? 'border-blue-200' : ''}`}>
                 <p className="text-xs text-gray-500">{label}</p>
-                <p className={`text-xl font-bold ${highlight ? 'text-blue-600' : ''}`}>{(value || 0).toFixed(2)}</p>
+                <p className={`text-xl font-bold ${highlight ? 'text-blue-600' : ''}`}>{fmtAmt(value)}</p>
               </div>
             ))}
           </div>
@@ -149,8 +150,8 @@ function SalePurchaseSummary() {
                         <td className="px-3 py-2">{r.invoice_number}</td>
                         <td className="px-3 py-2">{r.party}</td>
                         <td className="px-3 py-2">{r.total_carats}</td>
-                        <td className="px-3 py-2">{(r.usd_amt || 0).toFixed(2)}</td>
-                        <td className="px-3 py-2">{(r.inr_amt || 0).toFixed(2)}</td>
+                        <td className="px-3 py-2">{fmtAmt(r.usd_amt)}</td>
+                        <td className="px-3 py-2">{fmtAmt(r.inr_amt)}</td>
                         <td className="px-3 py-2">{r.payment_status}</td>
                       </tr>
                     ))}
@@ -224,7 +225,7 @@ function AccountLedger() {
             ].map(({ label, value, highlight }) => (
               <div key={label} className={`bg-white border rounded-lg p-4 ${highlight ? 'border-blue-200' : ''}`}>
                 <p className="text-xs text-gray-500">{label}</p>
-                <p className={`text-xl font-bold ${highlight ? 'text-blue-600' : ''}`}>{(value || 0).toFixed(2)}</p>
+                <p className={`text-xl font-bold ${highlight ? 'text-blue-600' : ''}`}>{fmtAmt(value)}</p>
               </div>
             ))}
           </div>
@@ -243,8 +244,8 @@ function AccountLedger() {
                     <td className="px-3 py-2">{e.date}</td>
                     <td className="px-3 py-2">{e.transaction_type}</td>
                     <td className="px-3 py-2">{e.account_name}</td>
-                    <td className="px-3 py-2">{e.debit ? (e.debit).toFixed(2) : '—'}</td>
-                    <td className="px-3 py-2">{e.credit ? (e.credit).toFixed(2) : '—'}</td>
+                    <td className="px-3 py-2">{e.debit ? fmtAmt(e.debit) : '—'}</td>
+                    <td className="px-3 py-2">{e.credit ? fmtAmt(e.credit) : '—'}</td>
                     <td className="px-3 py-2 text-gray-500">{e.narration}</td>
                   </tr>
                 ))}
@@ -297,11 +298,11 @@ function MonthlyExpense() {
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-white border rounded-lg p-4">
               <p className="text-xs text-gray-500">Grand Total (INR)</p>
-              <p className="text-xl font-bold">{(data.grand_total_inr || 0).toFixed(2)}</p>
+              <p className="text-xl font-bold">{fmtAmt(data.grand_total_inr)}</p>
             </div>
             <div className="bg-white border rounded-lg p-4">
               <p className="text-xs text-gray-500">Grand Total (USD)</p>
-              <p className="text-xl font-bold">{(data.grand_total_usd || 0).toFixed(2)}</p>
+              <p className="text-xl font-bold">{fmtAmt(data.grand_total_usd)}</p>
             </div>
           </div>
           <div className="bg-white border rounded-lg overflow-x-auto">
@@ -318,11 +319,11 @@ function MonthlyExpense() {
                 {(data.results || []).map((r, i) => (
                   <tr key={i} className="border-b hover:bg-gray-50">
                     <td className="px-3 py-2 font-medium">{r.month}</td>
-                    <td className="px-3 py-2">{(r.total_inr || 0).toFixed(2)}</td>
-                    <td className="px-3 py-2">{(r.total_usd || 0).toFixed(2)}</td>
+                    <td className="px-3 py-2">{fmtAmt(r.total_inr)}</td>
+                    <td className="px-3 py-2">{fmtAmt(r.total_usd)}</td>
                     <td className="px-3 py-2 text-xs text-gray-500">
                       {Object.entries(r.account_breakdown || {}).map(([acc, amt]) =>
-                        `${acc}: ${Number(amt).toFixed(0)}`
+                        `${acc}: ${Math.round(Number(amt))}`
                       ).join(' | ')}
                     </td>
                   </tr>
@@ -384,7 +385,7 @@ function CashFlow() {
             ].map(({ label, value, color }) => (
               <div key={label} className="bg-white border rounded-lg p-4">
                 <p className="text-xs text-gray-500">{label}</p>
-                <p className={`text-xl font-bold ${color}`}>{(value || 0).toFixed(2)}</p>
+                <p className={`text-xl font-bold ${color}`}>{fmtAmt(value)}</p>
               </div>
             ))}
           </div>
@@ -405,7 +406,7 @@ function CashFlow() {
                     <tr key={i} className="border-b hover:bg-gray-50">
                       {flowKeys.map(k => (
                         <td key={k} className="px-3 py-2 whitespace-nowrap">
-                          {typeof r[k] === 'number' ? r[k].toFixed(2) : (r[k] || '—')}
+                          {typeof r[k] === 'number' ? fmtAmt(r[k]) : (r[k] || '—')}
                         </td>
                       ))}
                     </tr>
@@ -477,7 +478,7 @@ function ProfitLoss() {
                 ].map(([label, value]) => (
                   <tr key={label} className="border-b">
                     <td className="px-4 py-2 text-gray-600">{label}</td>
-                    <td className="px-4 py-2 text-right font-medium">{(value || 0).toFixed(2)}</td>
+                    <td className="px-4 py-2 text-right font-medium">{fmtAmt(value)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -495,7 +496,7 @@ function ProfitLoss() {
                 ].map(([label, value]) => (
                   <tr key={label} className="border-b">
                     <td className="px-4 py-2 text-gray-600">{label}</td>
-                    <td className="px-4 py-2 text-right font-medium">{(value || 0).toFixed(2)}</td>
+                    <td className="px-4 py-2 text-right font-medium">{fmtAmt(value)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -511,7 +512,7 @@ function ProfitLoss() {
                 <div key={label} className={`text-center p-3 rounded-lg ${highlight ? 'bg-blue-50' : 'bg-gray-50'}`}>
                   <p className="text-xs text-gray-500">{label}</p>
                   <p className={`text-2xl font-bold ${value >= 0 ? (highlight ? 'text-blue-600' : 'text-green-600') : 'text-red-600'}`}>
-                    {(value || 0).toFixed(2)}
+                    {fmtAmt(value)}
                   </p>
                 </div>
               ))}
@@ -573,10 +574,10 @@ function TrialBalance() {
               {(data.results || []).map((r, i) => (
                 <tr key={i} className="border-b hover:bg-gray-50">
                   <td className="px-3 py-2">{r.account_name}</td>
-                  <td className="px-3 py-2 text-right">{(r.total_debit || 0).toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right">{(r.total_credit || 0).toFixed(2)}</td>
+                  <td className="px-3 py-2 text-right">{fmtAmt(r.total_debit)}</td>
+                  <td className="px-3 py-2 text-right">{fmtAmt(r.total_credit)}</td>
                   <td className={`px-3 py-2 text-right font-medium ${r.balance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
-                    {(r.balance || 0).toFixed(2)}
+                    {fmtAmt(r.balance)}
                   </td>
                 </tr>
               ))}
@@ -584,8 +585,8 @@ function TrialBalance() {
             <tfoot className="bg-gray-50 border-t font-semibold">
               <tr>
                 <td className="px-3 py-2">Totals</td>
-                <td className="px-3 py-2 text-right">{(data.grand_total_debit || 0).toFixed(2)}</td>
-                <td className="px-3 py-2 text-right">{(data.grand_total_credit || 0).toFixed(2)}</td>
+                <td className="px-3 py-2 text-right">{fmtAmt(data.grand_total_debit)}</td>
+                <td className="px-3 py-2 text-right">{fmtAmt(data.grand_total_credit)}</td>
                 <td className="px-3 py-2"></td>
               </tr>
             </tfoot>
@@ -659,7 +660,7 @@ function BalanceSheet() {
                     {rows.map((r, i) => (
                       <tr key={i} className="border-b hover:bg-gray-50">
                         <td className="px-3 py-2">{r.account_name}</td>
-                        <td className="px-3 py-2 text-right">{(r.balance || 0).toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right">{fmtAmt(r.balance)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -676,7 +677,7 @@ function BalanceSheet() {
             ].map(({ label, value, highlight }) => (
               <div key={label} className={`bg-white border rounded-lg p-4 ${highlight ? 'border-blue-200' : ''}`}>
                 <p className="text-xs text-gray-500">{label}</p>
-                <p className={`text-xl font-bold ${highlight ? 'text-blue-600' : ''}`}>{(value || 0).toFixed(2)}</p>
+                <p className={`text-xl font-bold ${highlight ? 'text-blue-600' : ''}`}>{fmtAmt(value)}</p>
               </div>
             ))}
           </div>

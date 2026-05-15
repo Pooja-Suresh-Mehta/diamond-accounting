@@ -259,7 +259,7 @@ export default function PurchasePage() {
       if (isEditMode) await api.put(`/parcel/purchase/${id}`, payload);
       else await api.post('/parcel/purchase', payload);
       toast.success(isEditMode ? 'Updated' : 'Created');
-      navigate('/parcel/purchase', { replace: true });
+      navigate('/parcel-transaction/purchase', { replace: true });
     } catch (e) {
       const d = e?.response?.data?.detail;
       toast.error(typeof d === 'string' ? d : 'Save failed');
@@ -349,7 +349,7 @@ export default function PurchasePage() {
           <h1 className="text-2xl font-bold text-gray-800">Parcel Transactions / Purchase</h1>
           <div className="flex gap-2">
             <button onClick={exportExcel} className="px-3 py-2 text-sm bg-gray-200 rounded-lg flex items-center gap-1.5"><Download className="w-4 h-4" /> Export Excel</button>
-            <button onClick={() => navigate('/parcel/purchase/add')} className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg flex items-center gap-1.5"><Plus className="w-4 h-4" /> Create Purchase</button>
+            <button onClick={() => navigate('/parcel-transaction/purchase/add')} className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg flex items-center gap-1.5"><Plus className="w-4 h-4" /> Create Purchase</button>
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
@@ -379,7 +379,7 @@ export default function PurchasePage() {
                   <tr key={r.id} className="border-t border-gray-100">
                     <td className="px-3 py-2">
                       <div className="flex gap-2">
-                        <button onClick={() => navigate(`/parcel/purchase/edit/${r.id}`)} className="text-blue-600">Edit</button>
+                        <button onClick={() => navigate(`/parcel-transaction/purchase/edit/${r.id}`)} className="text-blue-600">Edit</button>
                         <button onClick={() => removeRow(r.id)} className="text-red-600"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>

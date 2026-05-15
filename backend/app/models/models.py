@@ -356,16 +356,6 @@ class ParcelMaster(Base):
     purchase_price = Column(Float, default=0)
     purchase_price_currency = Column(String(3), default="USD")
 
-    # Running balance fields (updated by transactions)
-    purchased_weight = Column(Float, default=0)
-    purchased_pcs = Column(Integer, default=0)
-    sold_weight = Column(Float, default=0)
-    sold_pcs = Column(Integer, default=0)
-    on_memo_weight = Column(Float, default=0)
-    on_memo_pcs = Column(Integer, default=0)
-    consignment_weight = Column(Float, default=0)
-    consignment_pcs = Column(Integer, default=0)
-
     purchase_cost_usd_amount = Column(Float, default=0)
     purchase_cost_inr_amount = Column(Float, default=0)
     purchase_cost_inr_carat = Column(Float, default=0)
@@ -374,6 +364,9 @@ class ParcelMaster(Base):
     asking_usd_amount = Column(Float, default=0)
     asking_price_inr_carats = Column(Float, default=0)
     asking_inr_amount = Column(Float, default=0)
+
+    # Merge tracking: set to the surviving lot_no when this parcel is absorbed into another
+    merged_into_lot_no = Column(String(100), nullable=True, default=None)
 
     created_by_name = Column(String(100))
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -396,18 +389,22 @@ class ParcelMergeLog(Base):
     surviving_parcel_id = Column(String(36), nullable=False, index=True)
     surviving_lot_no = Column(String(100), nullable=False)
 
-    # The parcel that was absorbed (deleted after merge)
+    # The parcel that was absorbed — it remains in parcel_masters with merged_into_lot_no set
+    merged_parcel_id = Column(String(36), nullable=True)
     merged_lot_no = Column(String(100), nullable=False)
 
-    # Values that were contributed by the merged entry (for unmerge subtraction)
+    # Snapshot of the absorbed parcel's values at merge time (for final view computation)
     merged_weight = Column(Float, default=0)
     merged_purchase_cost_inr = Column(Float, default=0)
     merged_purchase_cost_usd = Column(Float, default=0)
     merged_asking_inr = Column(Float, default=0)
     merged_asking_usd = Column(Float, default=0)
-    # Weighted purchase price of the merged entry (for unmerge recalculation)
     merged_purchase_price = Column(Float, default=0)
     merged_purchase_price_currency = Column(String(3), default="USD")
+
+    # Whether this merge has been reversed (unmerged) — kept for audit trail
+    reversed = Column(Boolean, default=False)
+    reversed_at = Column(DateTime, nullable=True)
 
     merged_by_name = Column(String(100))
     merged_at = Column(DateTime, default=datetime.utcnow, index=True)
