@@ -114,18 +114,6 @@ Whenever you make code changes:
 
 ---
 
-## Login Credentials
-
-| Field    | Value              |
-|----------|--------------------|
-| Company  | Diamond Accounting |
-| Username | admin              |
-| Password | Poojan@2025        |
-
-Change the admin password after first login via **Users** in the sidebar.
-
----
-
 ## Restore Database from Excel
 
 If you need to wipe the database and restore from a backup Excel file:
