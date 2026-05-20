@@ -86,6 +86,7 @@ export default function PurchasePage() {
 
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState('');
+  const [lotNumberSearch, setLotNumberSearch] = useState('');
   const [rowLimit, setRowLimit] = useState(100);
   const [page, setPage] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -98,9 +99,11 @@ export default function PurchasePage() {
   const [showLotModal, setShowLotModal] = useState(false);
   const [lotFilters, setLotFilters] = useState({});
   const [masterOpts, setMasterOpts] = useState({ sizes: [], sieves: [] });
+  const [editingItemIdx, setEditingItemIdx] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
 
   const loadRows = async () => {
-    const res = await api.get('/parcel/purchase', { params: { search } });
+    const res = await api.get('/parcel/purchase', { params: { search, lot_number: lotNumberSearch } });
     setRows(Array.isArray(res.data) ? res.data : []);
     setPage(1);
   };
@@ -132,7 +135,9 @@ export default function PurchasePage() {
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
-  useEffect(() => { if (!isFormMode) loadRows().catch(() => toast.error('Failed to load purchases')); }, [search, isFormMode]);
+  useEffect(() => {
+    if (!isFormMode) loadRows().catch(() => toast.error('Failed to load purchases'));
+  }, [search, lotNumberSearch, isFormMode]);
   useEffect(() => {
     if (isEditMode) loadEdit().catch(() => toast.error('Failed to load purchase'));
     if (isAddMode) {
@@ -230,6 +235,46 @@ export default function PurchasePage() {
   };
   const removeSubmittedLot = (idx) => {
     setForm((p) => ({ ...p, items: p.items.filter((_, i) => i !== idx) }));
+  };
+
+  const updateEditingItem = (name, value) => {
+    setEditingItem((prev) => {
+      const updated = { ...prev, [name]: itemNumericFields.has(name) ? (value === '' ? '' : Number(value)) : value };
+      return normalizeLineItem(updated, {
+        currency: form.currency,
+        inrRate: form.inr_rate,
+        aedRate: form.usd_rate,
+        sourceField: name,
+      });
+    });
+  };
+
+  const updateEditingLessSign = (field, sign) => {
+    setEditingItem((prev) =>
+      normalizeLineItem(
+        { ...prev, [field]: sign },
+        { currency: form.currency, inrRate: form.inr_rate, aedRate: form.usd_rate },
+      )
+    );
+  };
+
+  const saveEditingItem = () => {
+    if (!editingItem || editingItemIdx === null) return;
+    if (Number(editingItem.issue_carats || 0) <= 0 || Number(editingItem.rate || 0) <= 0) {
+      return toast.error('Issue Carats and Rate are required');
+    }
+    setForm((p) => {
+      const updated = [...p.items];
+      updated[editingItemIdx] = normalizeLineItem(editingItem, {
+        currency: p.currency,
+        inrRate: p.inr_rate,
+        aedRate: p.usd_rate,
+      });
+      return { ...p, items: updated };
+    });
+    setEditingItem(null);
+    setEditingItemIdx(null);
+    toast.success('Item updated');
   };
 
   useEffect(() => {
@@ -353,6 +398,39 @@ export default function PurchasePage() {
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="flex-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">General Search</label>
+              <input
+                type="text"
+                placeholder="Search purchases..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Search by Lot No</label>
+              <input
+                type="text"
+                placeholder="Enter lot number..."
+                value={lotNumberSearch}
+                onChange={(e) => setLotNumberSearch(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div className="pt-5">
+              <button
+                onClick={() => {
+                  setSearch('');
+                  setLotNumberSearch('');
+                }}
+                className="px-3 py-2 text-sm bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
           <ListPageControls
             search={search}
             onSearchChange={setSearch}
@@ -546,7 +624,10 @@ export default function PurchasePage() {
                     <td className="px-2 py-2 text-right">{`${it.less2_sign || '-'}${fmtAmt(it.less2)}`}</td>
                     <td className="px-2 py-2 text-right">{`${it.less3_sign || '+'}${fmtAmt(it.less3)}`}</td>
                     <td className="px-2 py-2 text-right">{fmtAmt(it.amount)}</td>
-                    <td className="px-2 py-2"><button onClick={() => removeSubmittedLot(idx)} className="text-red-600"><Trash2 className="w-4 h-4" /></button></td>
+                    <td className="px-2 py-2 flex gap-1">
+                      <button onClick={() => { setEditingItem({ ...it }); setEditingItemIdx(idx); }} className="text-blue-600 text-xs px-2 py-1 bg-blue-50 rounded hover:bg-blue-100">Edit</button>
+                      <button onClick={() => removeSubmittedLot(idx)} className="text-red-600"><Trash2 className="w-4 h-4" /></button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -622,6 +703,58 @@ export default function PurchasePage() {
         onSelect={(lotNo) => { setLotFromMaster(lotNo); setShowLotModal(false); setLotFilters({}); }}
         onClose={() => { setShowLotModal(false); setLotFilters({}); }}
       />
+    )}
+    {editingItem !== null && (
+      <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+        <div className="bg-white w-full max-w-2xl rounded-xl shadow-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-800">Edit Lot Item</h3>
+            <button onClick={() => { setEditingItem(null); setEditingItemIdx(null); }} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+            <F label="Lot Number" name="lot_number" value={editingItem.lot_number} onChange={updateEditingItem} readOnly />
+            <F label="Item Name" name="item_name" value={editingItem.item_name} onChange={updateEditingItem} readOnly />
+            <F label="Shape" name="shape" value={editingItem.shape} onChange={updateEditingItem} readOnly />
+            <F label="Color" name="color" value={editingItem.color} onChange={updateEditingItem} readOnly />
+            <F label="Clarity" name="clarity" value={editingItem.clarity} onChange={updateEditingItem} readOnly />
+            <F label="Size" name="size" value={editingItem.size} onChange={updateEditingItem} options={masterOpts.sizes} />
+            <F label="Sieve" name="sieve" value={editingItem.sieve} onChange={updateEditingItem} options={masterOpts.sieves} />
+            <F label="Issue Carats *" name="issue_carats" value={editingItem.issue_carats} onChange={updateEditingItem} type="number" forceDecimal />
+            <F label="Reje%" name="reje_pct" value={editingItem.reje_pct} onChange={updateEditingItem} type="number" />
+            <F label="Rejection" name="rejection" value={editingItem.rejection} onChange={updateEditingItem} type="number" forceDecimal />
+            <F label="Selected Carat" name="selected_carat" value={editingItem.selected_carat} onChange={updateEditingItem} type="number" forceDecimal />
+            <F label="Pcs" name="pcs" value={editingItem.pcs} onChange={updateEditingItem} type="number" />
+            <F label="Rate *" name="rate" value={editingItem.rate} onChange={updateEditingItem} type="number" />
+            <F label="$Rate" name="usd_rate" value={editingItem.usd_rate} onChange={updateEditingItem} type="number" readOnly />
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Less1</label>
+              <div className="flex gap-1">
+                <select className="w-12 px-1 py-2 border rounded" value={editingItem.less1_sign || '-'} onChange={(e) => updateEditingLessSign('less1_sign', e.target.value)}><option value="-">-</option><option value="+">+</option></select>
+                <NumericInput name="less1" value={editingItem.less1} onChange={(_, val) => updateEditingItem('less1', val)} className="w-full px-2 py-2 border rounded text-right" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Less2</label>
+              <div className="flex gap-1">
+                <select className="w-12 px-1 py-2 border rounded" value={editingItem.less2_sign || '-'} onChange={(e) => updateEditingLessSign('less2_sign', e.target.value)}><option value="-">-</option><option value="+">+</option></select>
+                <NumericInput name="less2" value={editingItem.less2} onChange={(_, val) => updateEditingItem('less2', val)} className="w-full px-2 py-2 border rounded text-right" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Less3</label>
+              <div className="flex gap-1">
+                <select className="w-12 px-1 py-2 border rounded" value={editingItem.less3_sign || '+'} onChange={(e) => updateEditingLessSign('less3_sign', e.target.value)}><option value="+">+</option><option value="-">-</option></select>
+                <NumericInput name="less3" value={editingItem.less3} onChange={(_, val) => updateEditingItem('less3', val)} className="w-full px-2 py-2 border rounded text-right" />
+              </div>
+            </div>
+            <F label="Amount" name="amount" value={editingItem.amount} onChange={updateEditingItem} type="number" readOnly />
+          </div>
+          <div className="flex justify-end gap-2 mt-5 pt-4 border-t">
+            <button onClick={() => { setEditingItem(null); setEditingItemIdx(null); }} className="px-4 py-2 text-sm bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Cancel</button>
+            <button onClick={saveEditingItem} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save Changes</button>
+          </div>
+        </div>
+      </div>
     )}
     </>
   );

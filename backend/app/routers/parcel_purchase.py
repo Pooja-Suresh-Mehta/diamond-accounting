@@ -150,6 +150,7 @@ async def download_template():
 @router.get("", response_model=list[ParcelPurchaseOut])
 async def list_purchases(
     search: str | None = Query(default=None),
+    lot_number: str | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=500),
     current_user: User = Depends(get_current_user),
@@ -162,6 +163,12 @@ async def list_purchases(
             ParcelPurchase.invoice_number.ilike(like) |
             ParcelPurchase.bill_no.ilike(like) |
             ParcelPurchase.party.ilike(like)
+        )
+    if lot_number:
+        like = f"%{lot_number.strip()}%"
+        # Filter purchases that have items with matching lot numbers
+        q = q.where(
+            ParcelPurchase.items.any(ParcelPurchaseItem.lot_number.ilike(like))
         )
     q = q.order_by(ParcelPurchase.created_at.desc())
     q = q.offset((page - 1) * page_size).limit(page_size)

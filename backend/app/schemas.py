@@ -339,13 +339,13 @@ class ParcelMasterBase(BaseModel):
     sieve_mm: Optional[str] = None
     stock_group_id: Optional[str] = None
     description: Optional[str] = None
-    stock_type: Optional[str] = "Natural Diamond"
-    stock_subtype: Optional[str] = "Polished"
-    grown_process_type: Optional[str] = "Natural"
+    stock_type: str = "Natural Diamond"
+    stock_subtype: str = "Polished"
+    grown_process_type: str = "Natural"
     opening_weight_carats: float = 0.0
     usd_to_inr_rate: float = 0.0
     purchase_price: float = 0.0
-    purchase_price_currency: Optional[str] = "USD"
+    purchase_price_currency: str = "USD"
     purchase_cost_usd_amount: float = 0.0
     purchase_cost_inr_amount: float = 0.0
     purchase_cost_inr_carat: float = 0.0
@@ -409,7 +409,7 @@ class ParcelMergeLogOut(BaseModel):
     merged_asking_inr: float = 0
     merged_asking_usd: float = 0
     merged_purchase_price: float = 0
-    merged_purchase_price_currency: Optional[str] = "USD"
+    merged_purchase_price_currency: str = "USD"
     reversed: bool = False
     reversed_at: Optional[datetime] = None
     merged_by_name: Optional[str] = None

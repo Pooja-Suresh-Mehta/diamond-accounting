@@ -132,25 +132,23 @@ async def parcel_stock_report(
     all_lot_numbers = lot_numbers + merged_lot_numbers
 
     # --- Aggregate purchases per lot (weight + INR cost + USD cost) ---
+    # Formula handles both INR and USD automatically via inr_rate:
+    # INR purchases: inr_rate=1 → rate*1, USD purchases: inr_rate=90/92/etc → rate*exchange_rate
     purch_q = (
         select(
             ParcelPurchaseItem.lot_number,
-            func.coalesce(func.sum(ParcelPurchaseItem.issue_carats), 0).label("w"),
-            func.coalesce(func.sum(ParcelPurchaseItem.amount), 0).label("amt_inr"),
+            func.coalesce(func.sum(ParcelPurchaseItem.selected_carat), 0).label("w"),
+            # Cost INR: selected_carat * rate * inr_rate (auto-converts: rate*1 for INR, rate*90+ for USD)
             func.coalesce(func.sum(
-                sa_case(
-                    (ParcelPurchaseItem.usd_rate > 0,
-                     ParcelPurchaseItem.issue_carats * ParcelPurchaseItem.usd_rate),
-                    else_=0,
-                )
-            ), 0).label("amt_usd_direct"),
+                ParcelPurchaseItem.selected_carat * ParcelPurchaseItem.rate * func.coalesce(ParcelPurchase.inr_rate, 1)
+            ), 0).label("amt_inr"),
+            # Cost USD: selected_carat * usd_rate (or rate/inr_rate if usd_rate is NULL)
             func.coalesce(func.sum(
-                sa_case(
-                    (or_(ParcelPurchaseItem.usd_rate.is_(None), ParcelPurchaseItem.usd_rate <= 0),
-                     ParcelPurchaseItem.amount),
-                    else_=0,
+                ParcelPurchaseItem.selected_carat * func.coalesce(
+                    ParcelPurchaseItem.usd_rate,
+                    ParcelPurchaseItem.rate / func.coalesce(ParcelPurchase.inr_rate, 1)
                 )
-            ), 0).label("amt_inr_no_usd"),
+            ), 0).label("amt_usd"),
         )
         .join(ParcelPurchase, ParcelPurchaseItem.purchase_id == ParcelPurchase.id)
         .where(ParcelPurchase.company_id == cid, ParcelPurchaseItem.lot_number.in_(all_lot_numbers))
@@ -159,22 +157,18 @@ async def parcel_stock_report(
     purch_ret_q = (
         select(
             ParcelPurchaseReturnItem.lot_number,
-            func.coalesce(func.sum(ParcelPurchaseReturnItem.issue_carats), 0).label("w"),
-            func.coalesce(func.sum(ParcelPurchaseReturnItem.amount), 0).label("amt_inr"),
+            func.coalesce(func.sum(ParcelPurchaseReturnItem.selected_carat), 0).label("w"),
+            # Cost INR: selected_carat * rate * inr_rate (auto-converts: rate*1 for INR, rate*90+ for USD)
             func.coalesce(func.sum(
-                sa_case(
-                    (ParcelPurchaseReturnItem.usd_rate > 0,
-                     ParcelPurchaseReturnItem.issue_carats * ParcelPurchaseReturnItem.usd_rate),
-                    else_=0,
-                )
-            ), 0).label("amt_usd_direct"),
+                ParcelPurchaseReturnItem.selected_carat * ParcelPurchaseReturnItem.rate * func.coalesce(ParcelPurchaseReturn.inr_rate, 1)
+            ), 0).label("amt_inr"),
+            # Cost USD: selected_carat * usd_rate (or rate/inr_rate if usd_rate is NULL)
             func.coalesce(func.sum(
-                sa_case(
-                    (or_(ParcelPurchaseReturnItem.usd_rate.is_(None), ParcelPurchaseReturnItem.usd_rate <= 0),
-                     ParcelPurchaseReturnItem.amount),
-                    else_=0,
+                ParcelPurchaseReturnItem.selected_carat * func.coalesce(
+                    ParcelPurchaseReturnItem.usd_rate,
+                    ParcelPurchaseReturnItem.rate / func.coalesce(ParcelPurchaseReturn.inr_rate, 1)
                 )
-            ), 0).label("amt_inr_no_usd"),
+            ), 0).label("amt_usd"),
         )
         .join(ParcelPurchaseReturn, ParcelPurchaseReturnItem.purchase_return_id == ParcelPurchaseReturn.id)
         .where(ParcelPurchaseReturn.company_id == cid, ParcelPurchaseReturnItem.lot_number.in_(all_lot_numbers))
@@ -248,12 +242,10 @@ async def parcel_stock_report(
     consign_ret_idx  = _windex(consign_ret_rows)
 
     # Cost amount indices (from purchase items)
-    purch_inr_idx       = {r.lot_number: float(r.amt_inr)       for r in purch_rows}
-    purch_usd_idx       = {r.lot_number: float(r.amt_usd_direct) for r in purch_rows}
-    purch_inr_nfx_idx   = {r.lot_number: float(r.amt_inr_no_usd) for r in purch_rows}
-    pret_inr_idx        = {r.lot_number: float(r.amt_inr)        for r in purch_ret_rows}
-    pret_usd_idx        = {r.lot_number: float(r.amt_usd_direct) for r in purch_ret_rows}
-    pret_inr_nfx_idx    = {r.lot_number: float(r.amt_inr_no_usd) for r in purch_ret_rows}
+    purch_inr_idx = {r.lot_number: float(r.amt_inr) for r in purch_rows}
+    purch_usd_idx = {r.lot_number: float(r.amt_usd) for r in purch_rows}
+    pret_inr_idx = {r.lot_number: float(r.amt_inr) for r in purch_ret_rows}
+    pret_usd_idx = {r.lot_number: float(r.amt_usd) for r in purch_ret_rows}
 
     result = []
     for r in parcels:
@@ -290,12 +282,10 @@ async def parcel_stock_report(
         cost_usd_merges = sum(ml.merged_purchase_cost_usd or 0 for ml in ml_list)
 
         # Source 3: Purchase table entries for this lot + all merged lots
-        #   INR: direct sum of amount column
-        #   USD: items with usd_rate use (issue_carats × usd_rate); items without usd_rate use (amount / pm_rate)
-        purch_inr_raw     = _get_sum(purch_inr_idx,     all_lots) - _get_sum(pret_inr_idx,     all_lots)
-        purch_usd_direct  = _get_sum(purch_usd_idx,     all_lots) - _get_sum(pret_usd_idx,     all_lots)
-        purch_inr_no_usd  = _get_sum(purch_inr_nfx_idx, all_lots) - _get_sum(pret_inr_nfx_idx, all_lots)
-        purch_usd_raw     = purch_usd_direct + (purch_inr_no_usd / pm_rate if pm_rate else 0)
+        #   INR: selected_carat × rate × inr_rate (if USD currency) or selected_carat × rate (if INR)
+        #   USD: selected_carat × usd_rate
+        purch_inr_raw     = _get_sum(purch_inr_idx, all_lots) - _get_sum(pret_inr_idx, all_lots)
+        purch_usd_raw     = _get_sum(purch_usd_idx, all_lots) - _get_sum(pret_usd_idx, all_lots)
 
         total_cost_inr = cost_inr_base + cost_inr_merges + purch_inr_raw
         total_cost_usd = cost_usd_base + cost_usd_merges + purch_usd_raw

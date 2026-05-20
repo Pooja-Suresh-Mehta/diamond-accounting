@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../api';
 import toast from 'react-hot-toast';
 import { getCurrentDateISO } from '../../utils/dateDefaults';
-import { fmtAmt } from '../../utils/format';
 
 // ── Reusable filter components ───────────────────────────
 
@@ -128,6 +127,9 @@ const COLS = [
   { key: 'on_memo_weight',         label: 'Memo Wt', num: true },
   { key: 'consignment_weight',     label: 'Consign Wt', num: true },
   { key: 'on_hand_weight',         label: 'On Hand', num: true },
+  { key: 'purchase_price',         label: 'Purch Price', num: true },
+  { key: 'purchase_price_currency',label: 'Currency' },
+  { key: 'usd_to_inr_rate',        label: 'USD/INR Rate', num: true },
   { key: 'purchase_cost_usd_carat',label: 'Cost USD/Ct', num: true },
   { key: 'purchase_cost_inr_carat',label: 'Cost INR/Ct', num: true },
   { key: 'purchase_cost_usd_amount',label: 'Cost USD Amt', num: true },
@@ -308,8 +310,8 @@ export default function ParcelStockReport() {
   };
 
   // ── PMemo / PSale navigation ─────────────────────────────
-  const goMemo = () => navigate('/parcel-transaction/memo-out/add');
-  const goSale = () => navigate('/parcel-transaction/sale/add');
+  const goMemo = () => navigate('/parcel/memo-out/add');
+  const goSale = () => navigate('/parcel/sale/add');
 
   const tabs = ['Basic & Grading Search', 'Numeric Search', 'Date Search'];
   const shapes = options?.shapes || [];
@@ -387,9 +389,9 @@ export default function ParcelStockReport() {
         {selected.size > 0 && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex flex-wrap gap-4 text-sm">
             <span><strong>Tot Pcs:</strong> {selRows.length}</span>
-            <span><strong>Carats:</strong> {fmtAmt(selCarats, 3)}</span>
-            <span><strong>Amt Tot:</strong> {fmtAmt(selAmount)}</span>
-            <span><strong>Avg Rate:</strong> {fmtAmt(selAvgRate)}</span>
+            <span><strong>Carats:</strong> {selCarats.toFixed(3)}</span>
+            <span><strong>Amt Tot:</strong> {selAmount.toFixed(2)}</span>
+            <span><strong>Avg Rate:</strong> {selAvgRate.toFixed(2)}</span>
             {selLotNos && <span className="truncate max-w-xs"><strong>LotNos:</strong> {selLotNos}</span>}
           </div>
         )}
@@ -444,7 +446,7 @@ export default function ParcelStockReport() {
                     );
                     return (
                       <td key={col.key} className={`px-3 py-2 ${col.num ? 'text-right' : ''}`}>
-                        {col.num ? fmtAmt(r[col.key], col.key.includes('weight') || col.key === 'carats' || col.key === 'opening_weight_carats' ? 3 : 2) : (r[col.key] ?? '')}
+                        {col.num ? (Number(r[col.key] || 0).toFixed(col.key.includes('weight') || col.key === 'carats' || col.key === 'opening_weight_carats' ? 3 : 2)) : (r[col.key] ?? '')}
                       </td>
                     );
                   })}
@@ -460,16 +462,16 @@ export default function ParcelStockReport() {
                   <td className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">Totals</td>
                   {visibleCols.map(col => {
                     const totalsMap = {
-                      carats: fmtAmt(totalCarats, 3),
-                      purchased_weight: fmtAmt(totalPurchased, 3),
-                      sold_weight: fmtAmt(totalSold, 3),
-                      on_memo_weight: fmtAmt(totalMemo, 3),
-                      consignment_weight: fmtAmt(totalConsignment, 3),
-                      on_hand_weight: fmtAmt(totalOnHand, 3),
-                      asking_usd_amount: fmtAmt(totalAmount),
-                      asking_inr_amount: fmtAmt(totalAskINR),
-                      purchase_cost_usd_amount: fmtAmt(totalCostUSD),
-                      purchase_cost_inr_amount: fmtAmt(totalCostINR),
+                      carats: totalCarats.toFixed(3),
+                      purchased_weight: totalPurchased.toFixed(3),
+                      sold_weight: totalSold.toFixed(3),
+                      on_memo_weight: totalMemo.toFixed(3),
+                      consignment_weight: totalConsignment.toFixed(3),
+                      on_hand_weight: totalOnHand.toFixed(3),
+                      asking_usd_amount: totalAmount.toFixed(2),
+                      asking_inr_amount: totalAskINR.toFixed(2),
+                      purchase_cost_usd_amount: totalCostUSD.toFixed(2),
+                      purchase_cost_inr_amount: totalCostINR.toFixed(2),
                     };
                     return (
                       <td key={col.key} className={`px-3 py-2 ${col.num ? 'text-right' : ''}`}>
@@ -482,10 +484,10 @@ export default function ParcelStockReport() {
                   <td className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">Avg/Ct</td>
                   {visibleCols.map(col => {
                     const avgMap = {
-                      purchase_cost_usd_carat: fmtAmt(avgCostUSDCt),
-                      purchase_cost_inr_carat: fmtAmt(avgCostINRCt),
-                      asking_price_usd_carats: fmtAmt(avgAskUSDCt),
-                      asking_price_inr_carats: fmtAmt(avgAskINRCt),
+                      purchase_cost_usd_carat: avgCostUSDCt.toFixed(2),
+                      purchase_cost_inr_carat: avgCostINRCt.toFixed(2),
+                      asking_price_usd_carats: avgAskUSDCt.toFixed(2),
+                      asking_price_inr_carats: avgAskINRCt.toFixed(2),
                     };
                     return (
                       <td key={col.key} className={`px-3 py-2 ${col.num ? 'text-right' : ''}`}>
