@@ -338,7 +338,7 @@ class ParcelMaster(Base):
     id = Column(String(36), primary_key=True, default=new_uuid)
     company_id = Column(String(36), ForeignKey("companies.id"), nullable=False, index=True)
 
-    lot_no = Column(String(100), nullable=False)
+    lot_no = Column(Integer, nullable=False)
     item_name = Column(String(200), nullable=False)
     shape = Column(String(100))
     color = Column(String(100))
@@ -366,7 +366,7 @@ class ParcelMaster(Base):
     asking_inr_amount = Column(Float, default=0)
 
     # Merge tracking: set to the surviving lot_no when this parcel is absorbed into another
-    merged_into_lot_no = Column(String(100), nullable=True, default=None)
+    merged_into_lot_no = Column(Integer, nullable=True, default=None)
 
     created_by_name = Column(String(100))
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -387,11 +387,11 @@ class ParcelMergeLog(Base):
 
     # The parcel that survived the merge (absorbed the other entry)
     surviving_parcel_id = Column(String(36), nullable=False, index=True)
-    surviving_lot_no = Column(String(100), nullable=False)
+    surviving_lot_no = Column(Integer, nullable=False)
 
     # The parcel that was absorbed — it remains in parcel_masters with merged_into_lot_no set
     merged_parcel_id = Column(String(36), nullable=True)
-    merged_lot_no = Column(String(100), nullable=False)
+    merged_lot_no = Column(Integer, nullable=False)
 
     # Snapshot of the absorbed parcel's values at merge time (for final view computation)
     merged_weight = Column(Float, default=0)
@@ -477,7 +477,7 @@ class ParcelPurchaseItem(Base):
 
     id = Column(String(36), primary_key=True, default=new_uuid)
     purchase_id = Column(String(36), ForeignKey("parcel_purchases.id"), nullable=False, index=True)
-    lot_number = Column(String(100))
+    lot_number = Column(Integer)
     item_name = Column(String(200))
     shape = Column(String(100))
     color = Column(String(100))
@@ -567,7 +567,7 @@ class ParcelPurchaseReturnItem(Base):
 
     id = Column(String(36), primary_key=True, default=new_uuid)
     purchase_return_id = Column(String(36), ForeignKey("parcel_purchase_returns.id"), nullable=False, index=True)
-    lot_number = Column(String(100))
+    lot_number = Column(Integer)
     item_name = Column(String(200))
     shape = Column(String(100))
     color = Column(String(100))
@@ -647,7 +647,7 @@ class MemoOutItem(Base):
 
     id = Column(String(36), primary_key=True, default=new_uuid)
     memo_out_id = Column(String(36), ForeignKey("memo_outs.id"), nullable=False, index=True)
-    lot_number = Column(String(100))
+    lot_number = Column(Integer)
     item_name = Column(String(200))
     weight = Column(Float, default=0)
     pcs = Column(Integer, default=0)
@@ -722,7 +722,7 @@ class MemoOutReturnItem(Base):
 
     id = Column(String(36), primary_key=True, default=new_uuid)
     memo_out_return_id = Column(String(36), ForeignKey("memo_out_returns.id"), nullable=False, index=True)
-    lot_number = Column(String(100))
+    lot_number = Column(Integer)
     item_name = Column(String(200))
     weight = Column(Float, default=0)
     pcs = Column(Integer, default=0)
@@ -806,7 +806,7 @@ class SaleItem(Base):
 
     id = Column(String(36), primary_key=True, default=new_uuid)
     sale_id = Column(String(36), ForeignKey("sales.id"), nullable=False, index=True)
-    lot_number = Column(String(100))
+    lot_number = Column(Integer)
     item_name = Column(String(200))
     shape = Column(String(100))
     color = Column(String(100))
@@ -899,7 +899,7 @@ class SaleReturnItem(Base):
 
     id = Column(String(36), primary_key=True, default=new_uuid)
     sale_return_id = Column(String(36), ForeignKey("sale_returns.id"), nullable=False, index=True)
-    lot_number = Column(String(100))
+    lot_number = Column(Integer)
     item_name = Column(String(200))
     shape = Column(String(100))
     color = Column(String(100))
@@ -987,7 +987,7 @@ class ConsignmentItem(Base):
 
     id = Column(String(36), primary_key=True, default=new_uuid)
     consignment_id = Column(String(36), ForeignKey("consignments.id"), nullable=False, index=True)
-    lot_number = Column(String(100))
+    lot_number = Column(Integer)
     item_name = Column(String(200))
     shape = Column(String(100))
     color = Column(String(100))
@@ -1074,7 +1074,7 @@ class ConsignmentReturnItem(Base):
 
     id = Column(String(36), primary_key=True, default=new_uuid)
     consignment_return_id = Column(String(36), ForeignKey("consignment_returns.id"), nullable=False, index=True)
-    lot_number = Column(String(100))
+    lot_number = Column(Integer)
     item_name = Column(String(200))
     shape = Column(String(100))
     color = Column(String(100))

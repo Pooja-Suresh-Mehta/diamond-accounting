@@ -10,7 +10,7 @@ import NumericInput from '../components/NumericInput';
 import { fmtAmt } from '../utils/format';
 
 const INIT = {
-  lot_no: '',
+  lot_no: null,
   item_name: '',
   shape: '',
   color: '',
@@ -37,6 +37,7 @@ const INIT = {
 };
 
 const numericFields = new Set([
+  'lot_no',
   'opening_weight_carats', 'purchase_price', 'usd_to_inr_rate',
   'purchase_cost_usd_amount', 'purchase_cost_inr_amount',
   'purchase_cost_inr_carat', 'purchase_cost_usd_carat',
@@ -130,6 +131,7 @@ export default function ParcelMasterPage() {
 
   // Tabs: 'final' (default) | 'manual' | 'merge-log'
   const [activeTab, setActiveTab] = useState('final');
+  const [lotSortDir, setLotSortDir] = useState('desc');
   const [mergeLogs, setMergeLogs] = useState([]);
   const [loadingMergeLogs, setLoadingMergeLogs] = useState(false);
   const [viewRow, setViewRow] = useState(null); // row from final view to display read-only
@@ -253,7 +255,7 @@ export default function ParcelMasterPage() {
   };
 
   const save = async () => {
-    if (!form.lot_no.trim()) return toast.error('Stock ID/LotNo is required');
+    if (!form.lot_no) return toast.error('Stock ID/LotNo is required');
     if (!form.shape) return toast.error('Shape is required');
     if (!form.size) return toast.error('Size is required');
     setSaving(true);
@@ -364,8 +366,12 @@ export default function ParcelMasterPage() {
   };
 
   // ── Pagination (client-side, all rows loaded from API) ─
-  const tableRows = useMemo(() => rows.slice((page - 1) * rowLimit, (page - 1) * rowLimit + rowLimit), [rows, page, rowLimit]);
-  const totalPages = Math.max(1, Math.ceil(rows.length / rowLimit));
+  const sortedRows = useMemo(() => {
+    const dir = lotSortDir === 'asc' ? 1 : -1;
+    return [...rows].sort((a, b) => dir * String(a.lot_no ?? '').localeCompare(String(b.lot_no ?? ''), undefined, { numeric: true, sensitivity: 'base' }));
+  }, [rows, lotSortDir]);
+  const tableRows = useMemo(() => sortedRows.slice((page - 1) * rowLimit, (page - 1) * rowLimit + rowLimit), [sortedRows, page, rowLimit]);
+  const totalPages = Math.max(1, Math.ceil(sortedRows.length / rowLimit));
 
   // ── List view ──────────────────────────────────────────
   if (!isFormMode) {
@@ -428,7 +434,11 @@ export default function ParcelMasterPage() {
                   <tr>
                     <th className="text-left px-3 py-2">{activeTab === 'final' ? 'View' : 'Edit'}</th>
                     <th className="text-left px-3 py-2">Delete</th>
-                    <th className="text-left px-3 py-2">LotNo</th>
+                    <th className="text-left px-3 py-2">
+                      <button onClick={() => setLotSortDir(d => d === 'asc' ? 'desc' : 'asc')} className="flex items-center gap-1 hover:text-blue-600">
+                        LotNo <span className="text-xs">{lotSortDir === 'asc' ? '▲' : '▼'}</span>
+                      </button>
+                    </th>
                     <th className="text-left px-3 py-2">ItemName</th>
                     <th className="text-left px-3 py-2">Shape</th>
                     <th className="text-left px-3 py-2">Color</th>

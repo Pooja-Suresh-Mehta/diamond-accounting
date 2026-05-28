@@ -8,7 +8,8 @@ import PartyField, { BrokerField } from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { INIT_LINE_ITEM, applyLotAutoFields, calculateTotals, getCurrencyDefaults, normalizeLineItem } from '../utils/parcelTransactionCalc';
 import NumericInput from '../components/NumericInput';
-import { fmtAmt } from '../utils/format';
+import SearchableSelect from '../components/SearchableSelect';
+import { fmtAmt, fmtDate } from '../utils/format';
 import F from '../components/FormField';
 
 const INIT_ITEM = INIT_LINE_ITEM;
@@ -103,7 +104,7 @@ export default function PurchasePage() {
   const [editingItem, setEditingItem] = useState(null);
 
   const loadRows = async () => {
-    const res = await api.get('/parcel/purchase', { params: { search, lot_number: lotNumberSearch } });
+    const res = await api.get('/parcel/purchase', { params: { search, lot_number: lotNumberSearch || undefined } });
     setRows(Array.isArray(res.data) ? res.data : []);
     setPage(1);
   };
@@ -215,7 +216,7 @@ export default function PurchasePage() {
         return p;
       });
     }
-    const found = (opts.lot_items || []).find((l) => l.lot_no === lotNo);
+    const found = (opts.lot_items || []).find((l) => String(l.lot_no) === String(lotNo));
     setForm((p) => {
       const line = found ? applyLotAutoFields(lotDraft, found) : { ...lotDraft, lot_number: lotNo };
       setLotDraft(normalizeLineItem(line, {
@@ -411,12 +412,11 @@ export default function PurchasePage() {
             </div>
             <div className="flex-1">
               <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Search by Lot No</label>
-              <input
-                type="text"
-                placeholder="Enter lot number..."
+              <SearchableSelect
                 value={lotNumberSearch}
-                onChange={(e) => setLotNumberSearch(e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none"
+                options={(opts.lot_numbers || []).map(String)}
+                onChange={setLotNumberSearch}
+                placeholder="Select lot number..."
               />
             </div>
             <div className="pt-5">
@@ -461,11 +461,11 @@ export default function PurchasePage() {
                         <button onClick={() => removeRow(r.id)} className="text-red-600"><Trash2 className="w-4 h-4" /></button>
                       </div>
                     </td>
-                    <td className="px-3 py-2">{r.invoice_number}</td><td className="px-3 py-2">{r.date}</td><td className="px-3 py-2">{r.purchase_type}</td>
+                    <td className="px-3 py-2">{r.invoice_number}</td><td className="px-3 py-2">{fmtDate(r.date)}</td><td className="px-3 py-2">{r.purchase_type}</td>
                     <td className="px-3 py-2">{r.sub_type}</td><td className="px-3 py-2">{r.category}</td><td className="px-3 py-2">{r.party}</td>
                     <td className="px-3 py-2 text-right">{fmtAmt(r.total_carats)}</td><td className="px-3 py-2 text-right">{fmtAmt(r.total_amount)}</td>
                     <td className="px-3 py-2">{r.currency}</td><td className="px-3 py-2 text-right">{fmtAmt(r.inr_amt)}</td>
-                    <td className="px-3 py-2 text-right">{fmtAmt(r.usd_amt)}</td><td className="px-3 py-2">{r.due_date || ''}</td><td className="px-3 py-2">{r.payment_status}</td><td className="px-3 py-2">{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td><td className="px-3 py-2">{r.created_by_name || ''}</td>
+                    <td className="px-3 py-2 text-right">{fmtAmt(r.usd_amt)}</td><td className="px-3 py-2">{fmtDate(r.due_date)}</td><td className="px-3 py-2">{r.payment_status}</td><td className="px-3 py-2">{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td><td className="px-3 py-2">{r.created_by_name || ''}</td>
                   </tr>
                 ))}
               </tbody>
@@ -525,8 +525,8 @@ export default function PurchasePage() {
           <F label="Due Days" name="due_days" value={form.due_days} onChange={setValue} type="number" />
           <F label="Due Date" name="due_date" value={form.due_date} onChange={setValue} type="date" />
           <F label="Currency" name="currency" value={form.currency} onChange={setValue} options={opts.currencies} />
-          <F label="INR *" name="inr_rate" value={form.inr_rate} onChange={setValue} type="number" />
-          <F label="USD /" name="usd_rate" value={form.usd_rate} onChange={setValue} type="number" />
+          <F label="INR *" name="inr_rate" value={form.inr_rate} onChange={setValue} type="number" disabled={form.currency === 'INR'} />
+          <F label="USD /" name="usd_rate" value={form.usd_rate} onChange={setValue} type="number" disabled={form.currency === 'USD'} />
           <PartyField name="comm_agent" label="Comm.Agent" value={form.comm_agent} onChange={setValue} options={opts.parties} />
           <F label="Com %" name="com_pct" value={form.com_pct} onChange={setValue} type="number" />
           <F label="Com Amount" name="com_amount" value={form.com_amount} onChange={setValue} type="number" />
@@ -772,12 +772,17 @@ const LOT_COLS = [
 ];
 
 function LotBrowseModal({ lotItems, filters, onFilterChange, onSelect, onClose }) {
+  const [sortDir, setSortDir] = useState('desc');
   const filtered = lotItems.filter((lot) =>
     LOT_COLS.every(({ key }) => {
       const f = String(filters[key] || '').trim().toLowerCase();
       return !f || String(lot[key] || '').toLowerCase().includes(f);
     })
   );
+  const sorted = [...filtered].sort((a, b) => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return dir * String(a.lot_no ?? '').localeCompare(String(b.lot_no ?? ''), undefined, { numeric: true, sensitivity: 'base' });
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -790,8 +795,14 @@ function LotBrowseModal({ lotItems, filters, onFilterChange, onSelect, onClose }
           <table className="w-full text-sm">
             <thead className="bg-gray-50 sticky top-0 z-10">
               <tr>
-                {LOT_COLS.map(({ label }) => (
-                  <th key={label} className="text-left px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{label}</th>
+                {LOT_COLS.map(({ key, label }) => (
+                  <th key={label} className="text-left px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
+                    {key === 'lot_no' ? (
+                      <button onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')} className="flex items-center gap-1 hover:text-blue-600 uppercase tracking-wide">
+                        {label} <span className="text-xs normal-case font-normal">{sortDir === 'asc' ? '▲' : '▼'}</span>
+                      </button>
+                    ) : label}
+                  </th>
                 ))}
                 <th className="px-3 py-2" />
               </tr>
@@ -819,7 +830,7 @@ function LotBrowseModal({ lotItems, filters, onFilterChange, onSelect, onClose }
               {filtered.length === 0 && (
                 <tr><td colSpan={LOT_COLS.length + 1} className="text-center py-8 text-gray-400">No lots found</td></tr>
               )}
-              {filtered.map((lot) => (
+              {sorted.map((lot) => (
                 <tr key={lot.lot_no} className="border-t border-gray-100 hover:bg-blue-50">
                   <td className="px-3 py-2">{lot.lot_no}</td>
                   <td className="px-3 py-2">{lot.item_name}</td>

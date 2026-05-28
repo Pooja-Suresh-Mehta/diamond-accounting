@@ -3,12 +3,13 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Download, Plus, Save, Trash2 } from 'lucide-react';
 import api from '../api';
+import SearchableSelect from '../components/SearchableSelect';
 import ListPageControls from '../components/ListPageControls';
 import PartyField from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { calculateTotals, getCurrencyDefaults } from '../utils/parcelTransactionCalc';
 import NumericInput from '../components/NumericInput';
-import { fmtAmt } from '../utils/format';
+import { fmtAmt, fmtDate } from '../utils/format';
 import F from '../components/FormField';
 
 const INIT_ITEM = {
@@ -83,6 +84,20 @@ function calcUsdRate(rate, currency, inrRate, aedRate) {
   return r;
 }
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const isValidIsoDate = (value) => {
+  if (!DATE_RE.test(String(value || ''))) return false;
+  const dt = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(dt.getTime());
+};
+
+const addDaysToIsoDate = (value, days) => {
+  const dt = new Date(`${value}T00:00:00Z`);
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+};
+
 export default function MemoOutPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -93,6 +108,7 @@ export default function MemoOutPage() {
 
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState('');
+  const [lotNumberSearch, setLotNumberSearch] = useState('');
   const [rowLimit, setRowLimit] = useState(100);
   const [page, setPage] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -103,15 +119,32 @@ export default function MemoOutPage() {
     currency_rates: {}, parties: [], lot_numbers: [], lot_items: [], payment_statuses: [],
     next_invoice_number: '1',
   });
+  const [masterOpts, setMasterOpts] = useState({ sizes: [], sieves: [] });
+  const [showLotModal, setShowLotModal] = useState(false);
+  const [lotFilters, setLotFilters] = useState({});
+  const [editingItemIdx, setEditingItemIdx] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
 
   const loadRows = async () => {
-    const res = await api.get('/memo-out', { params: { search } });
+    const res = await api.get('/memo-out', { params: { search, lot_number: lotNumberSearch || undefined } });
     setRows(Array.isArray(res.data) ? res.data : []);
     setPage(1);
   };
   const loadOpts = async () => {
-    const res = await api.get('/memo-out/options');
-    setOpts(res.data);
+    const [memoRes, masterRes] = await Promise.all([
+      api.get('/memo-out/options'),
+      api.get('/parcel-master/options'),
+    ]);
+    setOpts(memoRes.data);
+    setMasterOpts({ sizes: masterRes.data.sizes || [], sieves: masterRes.data.sieves || [] });
+  };
+  const loadNextInvoiceNumber = async () => {
+    try {
+      const res = await api.get('/memo-out/next-invoice-number');
+      setOpts((p) => ({ ...p, next_invoice_number: res.data.next_invoice_number }));
+    } catch (e) {
+      toast.error('Failed to load next invoice number');
+    }
   };
   const loadEdit = async () => {
     if (!id) return;
@@ -134,14 +167,20 @@ export default function MemoOutPage() {
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
-  useEffect(() => { if (!isFormMode) loadRows().catch(() => toast.error('Failed to load memo outs')); }, [search, isFormMode]);
+  useEffect(() => { if (!isFormMode) loadRows().catch(() => toast.error('Failed to load memo outs')); }, [search, lotNumberSearch, isFormMode]);
   useEffect(() => {
     if (isEditMode) loadEdit().catch(() => toast.error('Failed to load memo out'));
     if (isAddMode) {
-      setForm({ ...INIT, invoice_number: String(opts.next_invoice_number || '1') });
+      loadNextInvoiceNumber();
       setLotDraft({ ...INIT_ITEM });
+      setForm((p) => ({ ...p, invoice_number: opts.next_invoice_number ? String(opts.next_invoice_number) : '1' }));
     }
-  }, [isEditMode, isAddMode, id, opts.next_invoice_number]);
+  }, [isEditMode, isAddMode, id]);
+  useEffect(() => {
+    if (isAddMode && opts.next_invoice_number) {
+      setForm((p) => ({ ...p, invoice_number: String(opts.next_invoice_number) }));
+    }
+  }, [opts.next_invoice_number, isAddMode]);
 
   const setValue = (name, value) => {
     setForm((p) => {
@@ -150,14 +189,36 @@ export default function MemoOutPage() {
         const defaults = opts.currency_rates?.[value] || getCurrencyDefaults(value);
         next.inr_rate = defaults.inr_rate;
         next.usd_rate = defaults.usd_rate;
+        // Re-normalize items and draft when currency or rates change
+        next.items = next.items.map((item) => ({
+          ...item,
+          usd_rate: calcUsdRate(item.rate, next.currency, next.inr_rate, next.usd_rate),
+          amount: calcItemAmount({ ...item, usd_rate: calcUsdRate(item.rate, next.currency, next.inr_rate, next.usd_rate) }),
+        }));
+        setLotDraft((draft) => ({
+          ...draft,
+          usd_rate: calcUsdRate(draft.rate, next.currency, next.inr_rate, next.usd_rate),
+          amount: calcItemAmount({ ...draft, usd_rate: calcUsdRate(draft.rate, next.currency, next.inr_rate, next.usd_rate) }),
+        }));
+      }
+      if (name === 'inr_rate' || name === 'usd_rate') {
+        // Re-normalize items and draft when rates change
+        next.items = next.items.map((item) => ({
+          ...item,
+          usd_rate: calcUsdRate(item.rate, next.currency, next.inr_rate, next.usd_rate),
+          amount: calcItemAmount({ ...item, usd_rate: calcUsdRate(item.rate, next.currency, next.inr_rate, next.usd_rate) }),
+        }));
+        setLotDraft((draft) => ({
+          ...draft,
+          usd_rate: calcUsdRate(draft.rate, next.currency, next.inr_rate, next.usd_rate),
+          amount: calcItemAmount({ ...draft, usd_rate: calcUsdRate(draft.rate, next.currency, next.inr_rate, next.usd_rate) }),
+        }));
       }
       if (name === 'due_days' || name === 'date') {
         const d = name === 'date' ? value : next.date;
         const days = name === 'due_days' ? Number(value) : Number(next.due_days);
-        if (d && days >= 0) {
-          const dt = new Date(d);
-          dt.setDate(dt.getDate() + days);
-          next.due_date = dt.toISOString().slice(0, 10);
+        if (isValidIsoDate(d) && Number.isFinite(days) && days >= 0) {
+          next.due_date = addDaysToIsoDate(d, days);
         }
       }
       return next;
@@ -183,7 +244,7 @@ export default function MemoOutPage() {
 
   const setLotFromMaster = (lotNo) => {
     if (!lotNo) { setLotDraft({ ...INIT_ITEM }); return; }
-    const found = (opts.lot_items || []).find((l) => l.lot_no === lotNo);
+    const found = (opts.lot_items || []).find((l) => String(l.lot_no) === String(lotNo));
     setLotDraft((draft) => {
       const updated = {
         ...draft,
@@ -200,7 +261,7 @@ export default function MemoOutPage() {
 
   const addLot = () => {
     if (!String(lotDraft.lot_number || '').trim()) return toast.error('Lot selection is required');
-    const found = (opts.lot_items || []).find((l) => l.lot_no === lotDraft.lot_number);
+    const found = (opts.lot_items || []).find((l) => String(l.lot_no) === String(lotDraft.lot_number));
     if (found && !Number(found.purchase_cost_usd_amount || 0)) {
       return toast.error('Not enough stock in hand to make sale or memo.');
     }
@@ -214,6 +275,42 @@ export default function MemoOutPage() {
   };
 
   const removeLot = (idx) => setForm((p) => ({ ...p, items: p.items.filter((_, i) => i !== idx) }));
+
+  const updateEditingItem = (name, value) => {
+    setEditingItem((prev) => {
+      const updated = { ...prev, [name]: itemNumericFields.has(name) ? (value === '' ? '' : Number(value)) : value };
+      updated.usd_rate = calcUsdRate(updated.rate, form.currency, form.inr_rate, form.usd_rate);
+      updated.amount = calcItemAmount(updated);
+      return updated;
+    });
+  };
+
+  const updateEditingLessSign = (field, sign) => {
+    setEditingItem((prev) => {
+      const updated = { ...prev, [field]: sign };
+      updated.amount = calcItemAmount(updated);
+      return updated;
+    });
+  };
+
+  const saveEditingItem = () => {
+    if (!editingItem || editingItemIdx === null) return;
+    if (!Number(editingItem.rate || 0)) {
+      return toast.error('Rate is required');
+    }
+    setForm((p) => {
+      const updated = [...p.items];
+      updated[editingItemIdx] = {
+        ...editingItem,
+        usd_rate: calcUsdRate(editingItem.rate, p.currency, p.inr_rate, p.usd_rate),
+        amount: calcItemAmount(editingItem),
+      };
+      return { ...p, items: updated };
+    });
+    setEditingItem(null);
+    setEditingItemIdx(null);
+    toast.success('Item updated');
+  };
 
   useEffect(() => {
     setForm((p) => ({ ...p, ...calculateTotals(p) }));
@@ -274,6 +371,38 @@ export default function MemoOutPage() {
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="flex-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">General Search</label>
+              <input
+                type="text"
+                placeholder="Search memo outs..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Search by Lot No</label>
+              <SearchableSelect
+                value={lotNumberSearch}
+                options={(opts.lot_numbers || []).map(String)}
+                onChange={setLotNumberSearch}
+                placeholder="Select lot number..."
+              />
+            </div>
+            <div className="pt-5">
+              <button
+                onClick={() => {
+                  setSearch('');
+                  setLotNumberSearch('');
+                }}
+                className="px-3 py-2 text-sm bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
           <ListPageControls search={search} onSearchChange={setSearch} rowLimit={rowLimit}
             onRowLimitChange={(v) => { setRowLimit(v); setPage(1); }} page={page} totalPages={totalPages}
             onPageChange={setPage} pageOptions={[100, 500, 1000, 1500]} />
@@ -288,7 +417,7 @@ export default function MemoOutPage() {
                   <th className="text-left px-3 py-2">Party</th>
                   <th className="text-left px-3 py-2">Type</th>
                   <th className="text-left px-3 py-2">Sub Type</th>
-                  <th className="text-left px-3 py-2">Category</th>
+                  <th className="text-left px-3 py2">Category</th>
                   <th className="text-right px-3 py-2">Carats</th>
                   <th className="text-right px-3 py-2">Amount</th>
                   <th className="text-left px-3 py-2">Currency</th>
@@ -296,6 +425,8 @@ export default function MemoOutPage() {
                   <th className="text-right px-3 py-2">USD Amt</th>
                   <th className="text-left px-3 py-2">DueDate</th>
                   <th className="text-left px-3 py-2">Status</th>
+                  <th className="text-left px-3 py-2">Created At</th>
+                  <th className="text-left px-3 py-2">Created By</th>
                 </tr>
               </thead>
               <tbody>
@@ -308,8 +439,8 @@ export default function MemoOutPage() {
                       </div>
                     </td>
                     <td className="px-3 py-2">{r.invoice_number}</td>
-                    <td className="px-3 py-2">{r.date}</td>
-                    <td className="px-3 py-2">{r.print_date || ''}</td>
+                    <td className="px-3 py-2">{fmtDate(r.date)}</td>
+                    <td className="px-3 py-2">{fmtDate(r.print_date)}</td>
                     <td className="px-3 py-2">{r.party}</td>
                     <td className="px-3 py-2">{r.purchase_type}</td>
                     <td className="px-3 py-2">{r.sub_type}</td>
@@ -319,8 +450,10 @@ export default function MemoOutPage() {
                     <td className="px-3 py-2">{r.currency}</td>
                     <td className="px-3 py-2 text-right">{fmtAmt(r.inr_amt)}</td>
                     <td className="px-3 py-2 text-right">{fmtAmt(r.usd_amt)}</td>
-                    <td className="px-3 py-2">{r.due_date || ''}</td>
+                    <td className="px-3 py-2">{fmtDate(r.due_date)}</td>
                     <td className="px-3 py-2">{r.payment_status}</td>
+                    <td className="px-3 py-2">{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
+                    <td className="px-3 py-2">{r.created_by_name || ''}</td>
                   </tr>
                 ))}
               </tbody>
@@ -358,7 +491,18 @@ export default function MemoOutPage() {
         <div className="border-t pt-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-semibold text-gray-700">Lot</h3>
-            <button onClick={() => window.open('/parcel-master/add', '_blank')} className="px-3 py-1.5 text-sm border border-blue-500 text-blue-600 rounded">Add Parcel Master</button>
+            <div className="flex gap-2">
+              <button onClick={() => window.open('/parcel-master/add', '_blank')} className="px-3 py-1.5 text-sm border border-blue-500 text-blue-600 rounded">Add Parcel Master</button>
+              <button
+                onClick={() => {
+                  setLotFilters({ shape: lotDraft.shape || '', color: lotDraft.color || '', clarity: lotDraft.clarity || '' });
+                  setShowLotModal(true);
+                }}
+                className="px-3 py-1.5 text-sm border border-green-500 text-green-600 rounded"
+              >
+                Browse Lots
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
             <div className="space-y-1 xl:col-span-2">
@@ -421,7 +565,12 @@ export default function MemoOutPage() {
                     <td className="px-2 py-2 text-right">{`${it.less2_sign}${fmtAmt(it.less2)}`}</td>
                     <td className="px-2 py-2 text-right">{`${it.less3_sign}${fmtAmt(it.less3)}`}</td>
                     <td className="px-2 py-2 text-right">{fmtAmt(it.amount)}</td>
-                    <td className="px-2 py-2"><button onClick={() => removeLot(idx)} className="text-red-600"><Trash2 className="w-4 h-4" /></button></td>
+                    <td className="px-2 py-2">
+                      <div className="flex gap-2">
+                        <button onClick={() => { setEditingItem(it); setEditingItemIdx(idx); }} className="text-blue-600">Edit</button>
+                        <button onClick={() => removeLot(idx)} className="text-red-600"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -460,6 +609,141 @@ export default function MemoOutPage() {
             <div className="flex items-center justify-between text-blue-600 font-semibold"><span>TRANSACTION FINAL AMOUNT</span><span className="text-3xl">{fmtAmt(form.transaction_final_amount)}</span></div>
           </div>
         </div>
+
+        {/* Edit Item Modal */}
+        {editingItem !== null && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-lg p-6 max-w-2xl w-full max-h-96 overflow-y-auto">
+              <h2 className="text-lg font-bold mb-4">Edit Item</h2>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <F label="Lot Number" name="lot_number" value={editingItem.lot_number} readOnly />
+                <F label="Item Name" name="item_name" value={editingItem.item_name} readOnly />
+                <F label="Weight" name="weight" value={editingItem.weight} type="number" readOnly />
+                <F label="Pcs" name="pcs" value={editingItem.pcs} onChange={(_, val) => updateEditingItem('pcs', val)} type="number" />
+                <F label="Rate *" name="rate" value={editingItem.rate} onChange={(_, val) => updateEditingItem('rate', val)} type="number" />
+                <F label="$Rate" name="usd_rate" value={editingItem.usd_rate} readOnly type="number" />
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Less1</label>
+                  <div className="flex gap-1">
+                    <select className="w-12 px-1 py-2 border rounded" value={editingItem.less1_sign} onChange={(e) => updateEditingLessSign('less1_sign', e.target.value)}><option value="-">-</option><option value="+">+</option></select>
+                    <NumericInput name="less1" value={editingItem.less1} onChange={(_, val) => updateEditingItem('less1', val)} className="w-full px-2 py-2 border rounded text-right" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Less2</label>
+                  <div className="flex gap-1">
+                    <select className="w-12 px-1 py-2 border rounded" value={editingItem.less2_sign} onChange={(e) => updateEditingLessSign('less2_sign', e.target.value)}><option value="-">-</option><option value="+">+</option></select>
+                    <NumericInput name="less2" value={editingItem.less2} onChange={(_, val) => updateEditingItem('less2', val)} className="w-full px-2 py-2 border rounded text-right" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Less3</label>
+                  <div className="flex gap-1">
+                    <select className="w-12 px-1 py-2 border rounded" value={editingItem.less3_sign} onChange={(e) => updateEditingLessSign('less3_sign', e.target.value)}><option value="+">+</option><option value="-">-</option></select>
+                    <NumericInput name="less3" value={editingItem.less3} onChange={(_, val) => updateEditingItem('less3', val)} className="w-full px-2 py-2 border rounded text-right" />
+                  </div>
+                </div>
+                <F label="Amount" name="amount" value={editingItem.amount} readOnly type="number" />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => { setEditingItem(null); setEditingItemIdx(null); }} className="px-3 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-100">Cancel</button>
+                <button onClick={saveEditingItem} className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Browse Lots Modal */}
+        {showLotModal && <LotBrowseModal onClose={() => setShowLotModal(false)} onSelect={(lotNo) => { setLotFromMaster(lotNo); setShowLotModal(false); setLotFilters({}); }} filters={lotFilters} setFilters={setLotFilters} lotItems={opts.lot_items || []} />}
+      </div>
+    </div>
+  );
+}
+
+const LOT_COLS_MEMO = [
+  { key: 'lot_no', label: 'Lot No' },
+  { key: 'item_name', label: 'Item Name' },
+  { key: 'opening_weight_carats', label: 'Weight' },
+  { key: 'opening_pcs', label: 'Pcs' },
+];
+
+function LotBrowseModal({ lotItems, filters, setFilters, onSelect, onClose }) {
+  const [sortDir, setSortDir] = useState('desc');
+  const filtered = lotItems.filter((lot) =>
+    LOT_COLS_MEMO.every(({ key }) => {
+      const f = String(filters[key] || '').trim().toLowerCase();
+      return !f || String(lot[key] || '').toLowerCase().includes(f);
+    })
+  );
+  const sorted = [...filtered].sort((a, b) => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return dir * String(a.lot_no ?? '').localeCompare(String(b.lot_no ?? ''), undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl mx-4 flex flex-col max-h-[85vh]">
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <h2 className="text-lg font-semibold text-gray-800">Browse Lots</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+        <div className="overflow-auto flex-1">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 sticky top-0 z-10">
+              <tr>
+                {LOT_COLS_MEMO.map(({ key, label }) => (
+                  <th key={label} className="text-left px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
+                    {key === 'lot_no' ? (
+                      <button onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')} className="flex items-center gap-1 hover:text-blue-600 uppercase tracking-wide">
+                        {label} <span className="text-xs normal-case font-normal">{sortDir === 'asc' ? '▲' : '▼'}</span>
+                      </button>
+                    ) : label}
+                  </th>
+                ))}
+                <th className="px-3 py-2" />
+              </tr>
+              <tr className="bg-white border-b">
+                {LOT_COLS_MEMO.map(({ key }) => (
+                  <td key={key} className="px-2 py-1">
+                    <input
+                      type="text"
+                      placeholder="filter"
+                      value={filters[key] || ''}
+                      onChange={(e) => setFilters((p) => ({ ...p, [key]: e.target.value }))}
+                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    />
+                  </td>
+                ))}
+                <td className="px-2 py-1">
+                  <button
+                    onClick={() => LOT_COLS_MEMO.forEach(({ key }) => setFilters((p) => ({ ...p, [key]: '' })))}
+                    className="text-xs text-gray-400 hover:text-red-500 whitespace-nowrap"
+                  >Clear</button>
+                </td>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr><td colSpan={LOT_COLS_MEMO.length + 1} className="text-center py-8 text-gray-400">No lots found</td></tr>
+              )}
+              {sorted.map((lot) => (
+                <tr key={lot.lot_no} className="border-t border-gray-100 hover:bg-blue-50">
+                  <td className="px-3 py-2">{lot.lot_no}</td>
+                  <td className="px-3 py-2">{lot.item_name}</td>
+                  <td className="px-3 py-2 text-right">{lot.opening_weight_carats}</td>
+                  <td className="px-3 py-2 text-right">{lot.opening_pcs}</td>
+                  <td className="px-3 py-2">
+                    <button
+                      onClick={() => onSelect(lot.lot_no)}
+                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                    >Select</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-5 py-3 border-t text-xs text-gray-400">{filtered.length} lot{filtered.length !== 1 ? 's' : ''} shown</div>
       </div>
     </div>
   );

@@ -8,7 +8,7 @@ import PartyField from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { calculateTotals, getCurrencyDefaults } from '../utils/parcelTransactionCalc';
 import NumericInput from '../components/NumericInput';
-import { fmtAmt } from '../utils/format';
+import { fmtAmt, fmtDate } from '../utils/format';
 import F from '../components/FormField';
 
 const INIT_ITEM = {
@@ -291,8 +291,8 @@ export default function MemoOutReturnPage() {
                     </td>
                     <td className="px-3 py-2">{r.invoice_number}</td>
                     <td className="px-3 py-2">{r.source_memo_number || ''}</td>
-                    <td className="px-3 py-2">{r.date}</td>
-                    <td className="px-3 py-2">{r.print_date || ''}</td>
+                    <td className="px-3 py-2">{fmtDate(r.date)}</td>
+                    <td className="px-3 py-2">{fmtDate(r.print_date)}</td>
                     <td className="px-3 py-2">{r.party}</td>
                     <td className="px-3 py-2">{r.purchase_type}</td>
                     <td className="px-3 py-2">{r.sub_type}</td>
@@ -302,7 +302,7 @@ export default function MemoOutReturnPage() {
                     <td className="px-3 py-2">{r.currency}</td>
                     <td className="px-3 py-2 text-right">{fmtAmt(r.inr_amt)}</td>
                     <td className="px-3 py-2 text-right">{fmtAmt(r.usd_amt)}</td>
-                    <td className="px-3 py-2">{r.due_date || ''}</td>
+                    <td className="px-3 py-2">{fmtDate(r.due_date)}</td>
                     <td className="px-3 py-2">{r.payment_status}</td>
                   </tr>
                 ))}

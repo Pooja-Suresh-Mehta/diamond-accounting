@@ -1,21 +1,23 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ParcelStockReport from './ParcelStockReport';
+import ParcelDetailedStockReport from './ParcelDetailedStockReport';
 import ReportPage from './ReportPage';
 
 const CURRENCIES = ['USD', 'INR', 'AED'];
 
 const TABS = [
-  { id: 'stock', label: '01 Stock' },
-  { id: 'purchases', label: '02 Purchase' },
-  { id: 'memo-out', label: '03 Memo Out' },
-  { id: 'sales', label: '04 Sale' },
-  { id: 'consignments', label: '05 Consignment' },
-  { id: 'stock-history', label: '06 Stock History' },
-  { id: 'purchase-returns', label: '07 Purchase Return' },
-  { id: 'sale-returns', label: '08 Sale Return' },
-  { id: 'memo-out-returns', label: '09 Memo Return' },
-  { id: 'consignment-returns', label: '10 Con. Return' },
+  { id: 'stock', label: 'Stock' },
+  { id: 'detailed-stock', label: 'Detailed Stock' },
+  { id: 'purchases', label: 'Purchase' },
+  { id: 'memo-out', label: 'Memo Out' },
+  { id: 'sales', label: 'Sale' },
+  { id: 'consignments', label: 'Consignment' },
+  { id: 'stock-history', label: 'Stock History' },
+  { id: 'purchase-returns', label: 'Purchase Return' },
+  { id: 'sale-returns', label: 'Sale Return' },
+  { id: 'memo-out-returns', label: 'Memo Return' },
+  { id: 'consignment-returns', label: 'Con. Return' },
 ];
 
 const STONE_FILTERS = [
@@ -46,6 +48,7 @@ const RETURN_FILTERS = [
   { key: 'inv_no', label: 'Invoice Number', type: 'text' },
   { key: 'party', label: 'Party', type: 'api-select', optionsKey: 'parties' },
   { key: 'broker', label: 'Broker', type: 'api-select', optionsKey: 'brokers' },
+  LOT_FILTER,
   ...STONE_FILTERS,
 ];
 
@@ -68,20 +71,24 @@ function ReportForTab({ tab }) {
     case 'stock':
       return <ParcelStockReport />;
 
+    case 'detailed-stock':
+      return <ParcelDetailedStockReport />;
+
     case 'purchases':
       return (
         <ReportPage title="Parcel Purchase Report" endpoint="/parcel-reports/purchases"
           filters={PURCHASE_SALE_FILTERS}
           columns={[
-            { key: 'date', label: 'Date' }, { key: 'invoice_number', label: 'Invoice #' },
+            { key: 'date', label: 'Date' }, { key: 'invoice_number', label: 'Invoice #', link: (val, row) => `/parcel-transaction/purchase/edit/${row.purchase_id}` },
             { key: 'party', label: 'Party' }, { key: 'lot_number', label: 'Lot #' },
             { key: 'shape', label: 'Shape' }, { key: 'color', label: 'Color' }, { key: 'clarity', label: 'Clarity' },
             { key: 'issue_carats', label: 'Issue Cts' }, { key: 'selected_carat', label: 'Sel. Cts' },
-            { key: 'pcs', label: 'Pcs' }, { key: 'rate', label: 'Rate' }, { key: 'amount', label: 'Amount' },
+            { key: 'pcs', label: 'Pcs' }, { key: 'currency', label: 'Curr' },
+            { key: 'rate', label: 'Rate' }, { key: 'usd_rate', label: 'USD Rate' }, { key: 'amount', label: 'Amt (Currency)' },
             { key: 'inr_amt', label: 'INR Amt' }, { key: 'usd_amt', label: 'USD Amt' },
             { key: 'payment_status', label: 'Status' },
           ]}
-          totalKeys={['selected_carat', 'amount']}
+          totalKeys={['selected_carat', 'inr_amt', 'usd_amt']}
         />
       );
 
@@ -90,7 +97,7 @@ function ReportForTab({ tab }) {
         <ReportPage title="Parcel Memo Out Report" endpoint="/parcel-reports/memo-out"
           filters={PURCHASE_SALE_FILTERS}
           columns={[
-            { key: 'date', label: 'Date' }, { key: 'invoice_number', label: 'Invoice #' },
+            { key: 'date', label: 'Date' }, { key: 'invoice_number', label: 'Invoice #', link: (val, row) => `/parcel-transaction/memo-out/edit/${row.memo_id}` },
             { key: 'party', label: 'Party' }, { key: 'lot_number', label: 'Lot #' },
             { key: 'item_name', label: 'Item' }, { key: 'weight', label: 'Weight' },
             { key: 'pcs', label: 'Pcs' }, { key: 'rate', label: 'Rate' }, { key: 'amount', label: 'Amount' },
@@ -106,7 +113,7 @@ function ReportForTab({ tab }) {
         <ReportPage title="Parcel Sale Report" endpoint="/parcel-reports/sales"
           filters={PURCHASE_SALE_FILTERS}
           columns={[
-            { key: 'date', label: 'Date' }, { key: 'invoice_number', label: 'Invoice #' },
+            { key: 'date', label: 'Date' }, { key: 'invoice_number', label: 'Invoice #', link: (val, row) => `/parcel-transaction/sale/edit/${row.sale_id}` },
             { key: 'party', label: 'Party' }, { key: 'lot_number', label: 'Lot #' },
             { key: 'shape', label: 'Shape' }, { key: 'color', label: 'Color' }, { key: 'clarity', label: 'Clarity' },
             { key: 'selected_carat', label: 'Cts' }, { key: 'pcs', label: 'Pcs' },
@@ -123,7 +130,7 @@ function ReportForTab({ tab }) {
         <ReportPage title="Parcel Consignment Report" endpoint="/parcel-reports/consignments"
           filters={PURCHASE_SALE_FILTERS}
           columns={[
-            { key: 'date', label: 'Date' }, { key: 'invoice_number', label: 'Invoice #' },
+            { key: 'date', label: 'Date' }, { key: 'invoice_number', label: 'Invoice #', link: (val, row) => `/parcel-transaction/consignment-in/edit/${row.consignment_id}` },
             { key: 'party', label: 'Party' }, { key: 'lot_number', label: 'Lot #' },
             { key: 'shape', label: 'Shape' }, { key: 'color', label: 'Color' }, { key: 'clarity', label: 'Clarity' },
             { key: 'selected_carat', label: 'Cts' }, { key: 'pcs', label: 'Pcs' },
@@ -152,7 +159,7 @@ function ReportForTab({ tab }) {
         <ReportPage title="Purchase Return Report" endpoint="/parcel-reports/purchase-returns"
           filters={RETURN_FILTERS}
           columns={[
-            { key: 'date', label: 'Date' }, { key: 'memo_number', label: 'Memo #' },
+            { key: 'date', label: 'Date' }, { key: 'memo_number', label: 'Memo #', link: (val, row) => `/parcel-transaction/purchase-return/edit/${row.return_id}` },
             { key: 'party', label: 'Party' }, { key: 'lot_number', label: 'Lot #' },
             { key: 'item_name', label: 'Item' }, { key: 'selected_carat', label: 'Cts' },
             { key: 'pcs', label: 'Pcs' }, { key: 'rate', label: 'Rate' }, { key: 'amount', label: 'Amount' },
@@ -167,7 +174,7 @@ function ReportForTab({ tab }) {
         <ReportPage title="Sale Return Report" endpoint="/parcel-reports/sale-returns"
           filters={RETURN_FILTERS}
           columns={[
-            { key: 'date', label: 'Date' }, { key: 'invoice_number', label: 'Invoice #' },
+            { key: 'date', label: 'Date' }, { key: 'invoice_number', label: 'Invoice #', link: (val, row) => `/parcel-transaction/sale-return/edit/${row.return_id}` },
             { key: 'party', label: 'Party' }, { key: 'lot_number', label: 'Lot #' },
             { key: 'item_name', label: 'Item' }, { key: 'selected_carat', label: 'Cts' },
             { key: 'pcs', label: 'Pcs' }, { key: 'rate', label: 'Rate' }, { key: 'amount', label: 'Amount' },
@@ -182,7 +189,7 @@ function ReportForTab({ tab }) {
         <ReportPage title="Memo Out Return Report" endpoint="/parcel-reports/memo-out-returns"
           filters={MEMO_CONSIGNMENT_RETURN_FILTERS}
           columns={[
-            { key: 'date', label: 'Date' }, { key: 'invoice_number', label: 'Invoice #' },
+            { key: 'date', label: 'Date' }, { key: 'invoice_number', label: 'Invoice #', link: (val, row) => `/parcel-transaction/memo-out-return/edit/${row.return_id}` },
             { key: 'source_memo_number', label: 'Source Memo' }, { key: 'party', label: 'Party' },
             { key: 'lot_number', label: 'Lot #' }, { key: 'item_name', label: 'Item' },
             { key: 'weight', label: 'Weight' }, { key: 'pcs', label: 'Pcs' },
@@ -198,7 +205,7 @@ function ReportForTab({ tab }) {
         <ReportPage title="Consignment Return Report" endpoint="/parcel-reports/consignment-returns"
           filters={MEMO_CONSIGNMENT_RETURN_FILTERS}
           columns={[
-            { key: 'date', label: 'Date' }, { key: 'invoice_number', label: 'Invoice #' },
+            { key: 'date', label: 'Date' }, { key: 'invoice_number', label: 'Invoice #', link: (val, row) => `/parcel-transaction/consignment-in-return/edit/${row.return_id}` },
             { key: 'source_consignment_number', label: 'Source Consignment' }, { key: 'party', label: 'Party' },
             { key: 'lot_number', label: 'Lot #' }, { key: 'item_name', label: 'Item' },
             { key: 'selected_carat', label: 'Cts' }, { key: 'pcs', label: 'Pcs' },

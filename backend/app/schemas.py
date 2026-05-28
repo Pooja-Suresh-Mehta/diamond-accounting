@@ -330,7 +330,7 @@ class AccountMasterOut(AccountMasterBase):
 # ── Parcel Master ───────────────────────────────────────
 
 class ParcelMasterBase(BaseModel):
-    lot_no: str
+    lot_no: int
     item_name: str
     shape: Optional[str] = None
     color: Optional[str] = None
@@ -339,13 +339,13 @@ class ParcelMasterBase(BaseModel):
     sieve_mm: Optional[str] = None
     stock_group_id: Optional[str] = None
     description: Optional[str] = None
-    stock_type: str = "Natural Diamond"
-    stock_subtype: str = "Polished"
-    grown_process_type: str = "Natural"
+    stock_type: Optional[str] = "Natural Diamond"
+    stock_subtype: Optional[str] = "Polished"
+    grown_process_type: Optional[str] = "Natural"
     opening_weight_carats: float = 0.0
     usd_to_inr_rate: float = 0.0
     purchase_price: float = 0.0
-    purchase_price_currency: str = "USD"
+    purchase_price_currency: Optional[str] = "USD"
     purchase_cost_usd_amount: float = 0.0
     purchase_cost_inr_amount: float = 0.0
     purchase_cost_inr_carat: float = 0.0
@@ -359,7 +359,7 @@ class ParcelMasterBase(BaseModel):
 class ParcelMasterCreate(ParcelMasterBase):
     @model_validator(mode="after")
     def validate_required(self):
-        if not self.lot_no.strip():
+        if not self.lot_no:
             raise ValueError("Stock ID/LotNo is required")
         if not (self.shape or "").strip():
             raise ValueError("Shape is required")
@@ -371,7 +371,7 @@ class ParcelMasterCreate(ParcelMasterBase):
 class ParcelMasterUpdate(ParcelMasterBase):
     @model_validator(mode="after")
     def validate_required(self):
-        if not self.lot_no.strip():
+        if not self.lot_no:
             raise ValueError("Stock ID/LotNo is required")
         if not (self.shape or "").strip():
             raise ValueError("Shape is required")
@@ -383,7 +383,7 @@ class ParcelMasterUpdate(ParcelMasterBase):
 class ParcelMasterOut(ParcelMasterBase):
     id: str
     company_id: str
-    merged_into_lot_no: Optional[str] = None
+    merged_into_lot_no: Optional[int] = None
     created_by_name: Optional[str] = None
     created_at: datetime
     updated_at: datetime
@@ -400,9 +400,9 @@ class ParcelMasterSimilarResponse(BaseModel):
 class ParcelMergeLogOut(BaseModel):
     id: str
     surviving_parcel_id: str
-    surviving_lot_no: str
+    surviving_lot_no: int
     merged_parcel_id: Optional[str] = None
-    merged_lot_no: str
+    merged_lot_no: int
     merged_weight: float = 0
     merged_purchase_cost_inr: float = 0
     merged_purchase_cost_usd: float = 0
@@ -421,13 +421,13 @@ class ParcelMergeLogOut(BaseModel):
 
 class ParcelMasterFinalOut(ParcelMasterOut):
     """Computed view: base parcel values + all active merge logs applied."""
-    merged_lots: list[str] = []  # lot numbers absorbed into this parcel
+    merged_lots: list[int] = []  # lot numbers absorbed into this parcel
 
 
 # ── Parcel Purchase ─────────────────────────────────────
 
 class ParcelPurchaseItemBase(BaseModel):
-    lot_number: Optional[str] = None
+    lot_number: Optional[int] = None
     item_name: Optional[str] = None
     shape: Optional[str] = None
     color: Optional[str] = None
@@ -532,7 +532,7 @@ class ParcelPurchaseOut(ParcelPurchaseBase):
 
 
 class ParcelPurchaseReturnItemBase(BaseModel):
-    lot_number: Optional[str] = None
+    lot_number: Optional[int] = None
     item_name: Optional[str] = None
     shape: Optional[str] = None
     color: Optional[str] = None
@@ -638,7 +638,7 @@ class ParcelPurchaseReturnOut(ParcelPurchaseReturnBase):
 
 
 class MemoOutItemBase(BaseModel):
-    lot_number: Optional[str] = None
+    lot_number: Optional[int] = None
     item_name: Optional[str] = None
     weight: float = 0
     pcs: int = 0
@@ -728,7 +728,7 @@ class MemoOutOut(MemoOutBase):
 # ── Memo Out Return ─────────────────────────────────────
 
 class MemoOutReturnItemBase(BaseModel):
-    lot_number: Optional[str] = None
+    lot_number: Optional[int] = None
     item_name: Optional[str] = None
     weight: float = 0
     pcs: int = 0
@@ -819,7 +819,7 @@ class MemoOutReturnOut(MemoOutReturnBase):
 # ── Sale ────────────────────────────────────────────────
 
 class SaleItemBase(BaseModel):
-    lot_number: Optional[str] = None
+    lot_number: Optional[int] = None
     item_name: Optional[str] = None
     shape: Optional[str] = None
     color: Optional[str] = None
@@ -928,7 +928,7 @@ class SaleOut(SaleBase):
 # ── Sale Return ─────────────────────────────────────────
 
 class SaleReturnItemBase(BaseModel):
-    lot_number: Optional[str] = None
+    lot_number: Optional[int] = None
     item_name: Optional[str] = None
     shape: Optional[str] = None
     color: Optional[str] = None
@@ -1036,7 +1036,7 @@ class SaleReturnOut(SaleReturnBase):
 # ── Consignment ──────────────────────────────────────────
 
 class ConsignmentItemBase(BaseModel):
-    lot_number: Optional[str] = None
+    lot_number: Optional[int] = None
     item_name: Optional[str] = None
     shape: Optional[str] = None
     color: Optional[str] = None
@@ -1140,7 +1140,7 @@ class ConsignmentOut(ConsignmentBase):
 # ── Consignment Return ───────────────────────────────────
 
 class ConsignmentReturnItemBase(BaseModel):
-    lot_number: Optional[str] = None
+    lot_number: Optional[int] = None
     item_name: Optional[str] = None
     shape: Optional[str] = None
     color: Optional[str] = None

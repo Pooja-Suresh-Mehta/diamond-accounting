@@ -9,6 +9,7 @@ const navItems = [
 
 const PARCEL_REPORT_TABS = [
   { tab: 'stock', label: 'Stock Report' },
+  { tab: 'detailed-stock', label: 'Detailed Stock Report' },
   { tab: 'purchases', label: 'Purchase Report' },
   { tab: 'memo-out', label: 'Memo Out Report' },
   { tab: 'sales', label: 'Sale Report' },

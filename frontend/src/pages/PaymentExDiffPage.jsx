@@ -7,7 +7,7 @@ import F from '../components/FormField';
 import ListPageControls from '../components/ListPageControls';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { getCurrencyDefaults } from '../utils/parcelTransactionCalc';
-import { fmtAmt } from '../utils/format';
+import { fmtAmt, fmtDate } from '../utils/format';
 
 const INIT = {
   vtype: 'Receipt',
@@ -158,7 +158,7 @@ export default function PaymentExDiffPage() {
                   <tr><td colSpan={9} className="text-center py-8 text-gray-400">No records</td></tr>
                 ) : pagedRows.map(r => (
                   <tr key={r.id} className="border-b hover:bg-gray-50">
-                    <td className="px-4 py-3">{r.date}</td>
+                    <td className="px-4 py-3">{fmtDate(r.date)}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded text-xs ${r.vtype === 'Receipt' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{r.vtype}</span>
                     </td>
@@ -245,9 +245,9 @@ export default function PaymentExDiffPage() {
               <tr><td colSpan={16} className="text-center py-6 text-gray-400">Click On Invoice to load pending items</td></tr>
             ) : invoiceRows.map((r, i) => (
               <tr key={i} className="border-t hover:bg-gray-50">
-                <td className="px-3 py-2">{r.date}</td>
+                <td className="px-3 py-2">{fmtDate(r.date)}</td>
                 <td className="px-3 py-2">{r.invoice_number}</td>
-                <td className="px-3 py-2">{r.due_date}</td>
+                <td className="px-3 py-2">{fmtDate(r.due_date)}</td>
                 <td className="px-3 py-2">{r.bill_no}</td>
                 <td className="px-3 py-2">{r.carats}</td>
                 <td className="px-3 py-2">{r.inv_cur}</td>

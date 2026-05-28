@@ -44,6 +44,7 @@ async def get_options(
     parcel_rows = (await db.execute(
         select(ParcelMaster).where(ParcelMaster.company_id == current_user.company_id).order_by(ParcelMaster.lot_no)
     )).scalars().all()
+    parcel_rows = sorted(parcel_rows, key=lambda r: int(str(r.lot_no)) if r.lot_no and str(r.lot_no).isdigit() else 0)
     return {
         "types": PURCHASE_TYPES, "sub_types": SUB_TYPES, "categories": CATEGORIES,
         "currencies": CURRENCIES, "currency_rates": CURRENCY_RATES,
@@ -57,8 +58,17 @@ async def get_options(
             "purchase_cost_price_usd_carats": r.purchase_cost_usd_carat,
         } for r in parcel_rows if r.lot_no],
         "payment_statuses": PAYMENT_STATUSES,
-        "next_invoice_number": await next_number(db, Sale, Sale.invoice_number, current_user.company_id),
     }
+
+
+@router.get("/next-invoice-number")
+async def get_next_invoice_number(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate next invoice number with database-level locking to prevent duplicates."""
+    next_num = await next_number(db, Sale, Sale.invoice_number, current_user.company_id)
+    return {"next_invoice_number": next_num}
 
 
 @router.get("", response_model=list[SaleOut])

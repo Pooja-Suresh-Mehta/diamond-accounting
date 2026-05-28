@@ -3,12 +3,13 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Download, Plus, Save, Trash2 } from 'lucide-react';
 import api from '../api';
+import SearchableSelect from '../components/SearchableSelect';
 import ListPageControls from '../components/ListPageControls';
 import PartyField, { BrokerField } from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { INIT_LINE_ITEM, applyLotAutoFields, calculateTotals, getCurrencyDefaults, normalizeLineItem } from '../utils/parcelTransactionCalc';
 import NumericInput from '../components/NumericInput';
-import { fmtAmt } from '../utils/format';
+import { fmtAmt, fmtDate } from '../utils/format';
 import F from '../components/FormField';
 
 const INIT_ITEM = { ...INIT_LINE_ITEM, cogs: 0 };
@@ -63,6 +64,20 @@ const numericFields = new Set([
 ]);
 const itemNumericFields = new Set(['issue_carats', 'reje_pct', 'rejection', 'selected_carat', 'pcs', 'rate', 'usd_rate', 'cogs', 'less1', 'less2', 'less3', 'amount']);
 
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const isValidIsoDate = (value) => {
+  if (!DATE_RE.test(String(value || ''))) return false;
+  const dt = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(dt.getTime());
+};
+
+const addDaysToIsoDate = (value, days) => {
+  const dt = new Date(`${value}T00:00:00Z`);
+  dt.setUTCDate(dt.getUTCDate() + days);
+  return dt.toISOString().slice(0, 10);
+};
+
 export default function SalePage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -73,6 +88,7 @@ export default function SalePage() {
 
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState('');
+  const [lotNumberSearch, setLotNumberSearch] = useState('');
   const [rowLimit, setRowLimit] = useState(100);
   const [page, setPage] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -83,15 +99,32 @@ export default function SalePage() {
     currency_rates: {}, parties: [], payment_statuses: [], lot_numbers: [], lot_items: [],
     next_invoice_number: '1',
   });
+  const [masterOpts, setMasterOpts] = useState({ sizes: [], sieves: [] });
+  const [showLotModal, setShowLotModal] = useState(false);
+  const [lotFilters, setLotFilters] = useState({});
+  const [editingItemIdx, setEditingItemIdx] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
 
   const loadRows = async () => {
-    const res = await api.get('/sale', { params: { search } });
+    const res = await api.get('/sale', { params: { search, lot_number: lotNumberSearch || undefined } });
     setRows(Array.isArray(res.data) ? res.data : []);
     setPage(1);
   };
   const loadOpts = async () => {
-    const res = await api.get('/sale/options');
-    setOpts(res.data);
+    const [saleRes, masterRes] = await Promise.all([
+      api.get('/sale/options'),
+      api.get('/parcel-master/options'),
+    ]);
+    setOpts(saleRes.data);
+    setMasterOpts({ sizes: masterRes.data.sizes || [], sieves: masterRes.data.sieves || [] });
+  };
+  const loadNextInvoiceNumber = async () => {
+    try {
+      const res = await api.get('/sale/next-invoice-number');
+      setOpts((p) => ({ ...p, next_invoice_number: res.data.next_invoice_number }));
+    } catch (e) {
+      toast.error('Failed to load next invoice number');
+    }
   };
   const loadEdit = async () => {
     if (!id) return;
@@ -112,14 +145,20 @@ export default function SalePage() {
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
-  useEffect(() => { if (!isFormMode) loadRows().catch(() => toast.error('Failed to load sales')); }, [search, isFormMode]);
+  useEffect(() => { if (!isFormMode) loadRows().catch(() => toast.error('Failed to load sales')); }, [search, lotNumberSearch, isFormMode]);
   useEffect(() => {
     if (isEditMode) loadEdit().catch(() => toast.error('Failed to load sale'));
     if (isAddMode) {
-      setForm({ ...INIT, invoice_number: String(opts.next_invoice_number || '1') });
+      loadNextInvoiceNumber();
       setLotDraft({ ...INIT_ITEM });
+      setForm({ ...INIT, date: getCurrentDateISO(), print_date: getCurrentDateISO() });
     }
-  }, [isEditMode, isAddMode, id, opts.next_invoice_number]);
+  }, [isEditMode, isAddMode, id]);
+  useEffect(() => {
+    if (isAddMode && opts.next_invoice_number) {
+      setForm((p) => ({ ...p, invoice_number: String(opts.next_invoice_number) }));
+    }
+  }, [opts.next_invoice_number, isAddMode]);
 
   const setValue = (name, value) => {
     setForm((p) => {
@@ -142,10 +181,8 @@ export default function SalePage() {
       if (name === 'due_days' || name === 'date') {
         const d = name === 'date' ? value : next.date;
         const days = name === 'due_days' ? Number(value) : Number(next.due_days);
-        if (d && days >= 0) {
-          const dt = new Date(d);
-          dt.setDate(dt.getDate() + days);
-          next.due_date = dt.toISOString().slice(0, 10);
+        if (isValidIsoDate(d) && Number.isFinite(days) && days >= 0) {
+          next.due_date = addDaysToIsoDate(d, days);
         }
       }
       return next;
@@ -213,6 +250,46 @@ export default function SalePage() {
 
   const removeSubmittedLot = (idx) => setForm((p) => ({ ...p, items: p.items.filter((_, i) => i !== idx) }));
 
+  const updateEditingItem = (name, value) => {
+    setEditingItem((prev) => {
+      const updated = { ...prev, [name]: itemNumericFields.has(name) ? (value === '' ? '' : Number(value)) : value };
+      return normalizeLineItem(updated, {
+        currency: form.currency,
+        inrRate: form.inr_rate,
+        aedRate: form.usd_rate,
+        sourceField: name,
+      });
+    });
+  };
+
+  const updateEditingLessSign = (field, sign) => {
+    setEditingItem((prev) =>
+      normalizeLineItem(
+        { ...prev, [field]: sign },
+        { currency: form.currency, inrRate: form.inr_rate, aedRate: form.usd_rate },
+      )
+    );
+  };
+
+  const saveEditingItem = () => {
+    if (!editingItem || editingItemIdx === null) return;
+    if (Number(editingItem.issue_carats || 0) <= 0 || Number(editingItem.rate || 0) <= 0) {
+      return toast.error('Issue Carats and Rate are required');
+    }
+    setForm((p) => {
+      const updated = [...p.items];
+      updated[editingItemIdx] = normalizeLineItem(editingItem, {
+        currency: p.currency,
+        inrRate: p.inr_rate,
+        aedRate: p.usd_rate,
+      });
+      return { ...p, items: updated };
+    });
+    setEditingItem(null);
+    setEditingItemIdx(null);
+    toast.success('Item updated');
+  };
+
   useEffect(() => {
     setForm((p) => ({ ...p, ...calculateTotals(p) }));
   }, [form.items, form.currency, form.cgst_pct, form.sgst_pct, form.igst_pct, form.vat_pct, form.inr_rate, form.usd_rate]);
@@ -274,6 +351,38 @@ export default function SalePage() {
           </div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="flex-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">General Search</label>
+              <input
+                type="text"
+                placeholder="Search sales..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Search by Lot No</label>
+              <SearchableSelect
+                value={lotNumberSearch}
+                options={(opts.lot_numbers || []).map(String)}
+                onChange={setLotNumberSearch}
+                placeholder="Select lot number..."
+              />
+            </div>
+            <div className="pt-5">
+              <button
+                onClick={() => {
+                  setSearch('');
+                  setLotNumberSearch('');
+                }}
+                className="px-3 py-2 text-sm bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
           <ListPageControls search={search} onSearchChange={setSearch} rowLimit={rowLimit}
             onRowLimitChange={(v) => { setRowLimit(v); setPage(1); }} page={page} totalPages={totalPages}
             onPageChange={setPage} pageOptions={[100, 500, 1000, 1500]} />
@@ -281,7 +390,7 @@ export default function SalePage() {
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-gray-600">
                 <tr>
-                  {['Action', 'Invoice', 'BillNo', 'Date', 'Print Date', 'Party', 'Type', 'Sub Type', 'Category', 'Carats', 'Amount', 'Currency', 'INR Amt', 'USD Amt', 'DueDate', 'Payment Status'].map((h) => (
+                  {['Action', 'Invoice', 'BillNo', 'Date', 'Print Date', 'Party', 'Type', 'Sub Type', 'Category', 'Carats', 'Amount', 'Currency', 'INR Amt', 'USD Amt', 'DueDate', 'Payment Status', 'Created At', 'Created By'].map((h) => (
                     <th key={h} className="text-left px-3 py-2">{h}</th>
                   ))}
                 </tr>
@@ -297,8 +406,8 @@ export default function SalePage() {
                     </td>
                     <td className="px-3 py-2">{r.invoice_number}</td>
                     <td className="px-3 py-2">{r.bill_no}</td>
-                    <td className="px-3 py-2">{r.date}</td>
-                    <td className="px-3 py-2">{r.print_date || ''}</td>
+                    <td className="px-3 py-2">{fmtDate(r.date)}</td>
+                    <td className="px-3 py-2">{fmtDate(r.print_date)}</td>
                     <td className="px-3 py-2">{r.party}</td>
                     <td className="px-3 py-2">{r.purchase_type}</td>
                     <td className="px-3 py-2">{r.sub_type}</td>
@@ -308,8 +417,10 @@ export default function SalePage() {
                     <td className="px-3 py-2">{r.currency}</td>
                     <td className="px-3 py-2 text-right">{fmtAmt(r.inr_amt)}</td>
                     <td className="px-3 py-2 text-right">{fmtAmt(r.usd_amt)}</td>
-                    <td className="px-3 py-2">{r.due_date || ''}</td>
+                    <td className="px-3 py-2">{fmtDate(r.due_date)}</td>
                     <td className="px-3 py-2">{r.payment_status}</td>
+                    <td className="px-3 py-2">{r.created_at ? new Date(r.created_at).toLocaleString() : ''}</td>
+                    <td className="px-3 py-2">{r.created_by_name || ''}</td>
                   </tr>
                 ))}
               </tbody>
@@ -340,8 +451,8 @@ export default function SalePage() {
           <F label="Due Days" name="due_days" value={form.due_days} onChange={setValue} type="number" />
           <F label="Due Date" name="due_date" value={form.due_date} onChange={setValue} type="date" />
           <F label="Currency" name="currency" value={form.currency} onChange={setValue} options={opts.currencies} />
-          <F label="INR *" name="inr_rate" value={form.inr_rate} onChange={setValue} type="number" />
-          <F label="USD /" name="usd_rate" value={form.usd_rate} onChange={setValue} type="number" />
+          <F label="INR *" name="inr_rate" value={form.inr_rate} onChange={setValue} type="number" disabled={form.currency === 'INR'} />
+          <F label="USD /" name="usd_rate" value={form.usd_rate} onChange={setValue} type="number" disabled={form.currency === 'USD'} />
           <PartyField name="comm_agent" label="Comm.Agent" value={form.comm_agent} onChange={setValue} options={opts.parties} />
           <F label="Com %" name="com_pct" value={form.com_pct} onChange={setValue} type="number" />
           <F label="Com Amount" name="com_amount" value={form.com_amount} onChange={setValue} type="number" />
@@ -361,7 +472,17 @@ export default function SalePage() {
         <div className="border-t pt-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-semibold text-gray-700">Lot Number</h3>
-            <button onClick={() => window.open('/parcel-master/add', '_blank')} className="px-3 py-1.5 text-sm border border-blue-500 text-blue-600 rounded">Add Parcel Master</button>
+            <div className="flex gap-2">
+              <button onClick={() => {
+                const pre = {};
+                if (lotDraft.shape) pre.shape = lotDraft.shape;
+                if (lotDraft.color) pre.color = lotDraft.color;
+                if (lotDraft.clarity) pre.clarity = lotDraft.clarity;
+                setLotFilters(pre);
+                setShowLotModal(true);
+              }} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded">Browse Lots</button>
+              <button onClick={() => window.open('/parcel-master/add', '_blank')} className="px-3 py-1.5 text-sm border border-blue-500 text-blue-600 rounded">Add Parcel Master</button>
+            </div>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
             <div className="space-y-1 xl:col-span-2">
@@ -375,8 +496,8 @@ export default function SalePage() {
             <F label="Shape" name="shape" value={lotDraft.shape} onChange={setItemValue} readOnly />
             <F label="Color" name="color" value={lotDraft.color} onChange={setItemValue} readOnly />
             <F label="Clarity" name="clarity" value={lotDraft.clarity} onChange={setItemValue} readOnly />
-            <F label="Size" name="size" value={lotDraft.size} onChange={setItemValue} readOnly />
-            <F label="Sieve" name="sieve" value={lotDraft.sieve} onChange={setItemValue} readOnly />
+            <F label="Size" name="size" value={lotDraft.size} onChange={setItemValue} options={masterOpts.sizes} />
+            <F label="Sieve" name="sieve" value={lotDraft.sieve} onChange={setItemValue} options={masterOpts.sieves} />
             <F label="Issue Carats *" name="issue_carats" value={lotDraft.issue_carats} onChange={setItemValue} type="number" forceDecimal />
             <F label="Reje%" name="reje_pct" value={lotDraft.reje_pct} onChange={setItemValue} type="number" />
             <F label="Rejection" name="rejection" value={lotDraft.rejection} onChange={setItemValue} type="number" forceDecimal />
@@ -438,7 +559,10 @@ export default function SalePage() {
                       <td className="px-2 py-2 text-right">{`${it.less2_sign || '-'}${fmtAmt(it.less2)}`}</td>
                       <td className="px-2 py-2 text-right">{`${it.less3_sign || '+'}${fmtAmt(it.less3)}`}</td>
                       <td className="px-2 py-2 text-right">{fmtAmt(it.amount)}</td>
-                      <td className="px-2 py-2"><button onClick={() => removeSubmittedLot(idx)} className="text-red-600"><Trash2 className="w-4 h-4" /></button></td>
+                      <td className="px-2 py-2 flex gap-1">
+                        <button onClick={() => { setEditingItem({ ...it }); setEditingItemIdx(idx); }} className="text-blue-600 text-xs px-2 py-1 bg-blue-50 rounded hover:bg-blue-100">Edit</button>
+                        <button onClick={() => removeSubmittedLot(idx)} className="text-red-600"><Trash2 className="w-4 h-4" /></button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -478,6 +602,169 @@ export default function SalePage() {
             <div className="flex items-center justify-between text-blue-600 font-semibold"><span>TRANSACTION FINAL AMOUNT</span><span className="text-3xl">{fmtAmt(form.transaction_final_amount)}</span></div>
           </div>
         </div>
+
+        {/* Edit Item Modal */}
+        {editingItem !== null && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-2xl rounded-xl shadow-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-800">Edit Lot Item</h3>
+                <button onClick={() => { setEditingItem(null); setEditingItemIdx(null); }} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                <F label="Lot Number" name="lot_number" value={editingItem.lot_number} onChange={updateEditingItem} readOnly />
+            <F label="Item Name" name="item_name" value={editingItem.item_name} onChange={updateEditingItem} readOnly />
+            <F label="Shape" name="shape" value={editingItem.shape} onChange={updateEditingItem} readOnly />
+            <F label="Color" name="color" value={editingItem.color} onChange={updateEditingItem} readOnly />
+            <F label="Clarity" name="clarity" value={editingItem.clarity} onChange={updateEditingItem} readOnly />
+            <F label="Size" name="size" value={editingItem.size} onChange={updateEditingItem} options={masterOpts.sizes} />
+            <F label="Sieve" name="sieve" value={editingItem.sieve} onChange={updateEditingItem} options={masterOpts.sieves} />
+            <F label="Issue Carats *" name="issue_carats" value={editingItem.issue_carats} onChange={updateEditingItem} type="number" forceDecimal />
+            <F label="Reje%" name="reje_pct" value={editingItem.reje_pct} onChange={updateEditingItem} type="number" />
+            <F label="Rejection" name="rejection" value={editingItem.rejection} onChange={updateEditingItem} type="number" forceDecimal />
+            <F label="Selected Carat" name="selected_carat" value={editingItem.selected_carat} onChange={updateEditingItem} type="number" forceDecimal />
+            <F label="Pcs" name="pcs" value={editingItem.pcs} onChange={updateEditingItem} type="number" />
+            <F label="Rate *" name="rate" value={editingItem.rate} onChange={updateEditingItem} type="number" />
+            <F label="$Rate" name="usd_rate" value={editingItem.usd_rate} onChange={updateEditingItem} type="number" readOnly />
+            <F label="COGS" name="cogs" value={editingItem.cogs} onChange={updateEditingItem} type="number" />
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Less1</label>
+              <div className="flex gap-1">
+                <select className="w-12 px-1 py-2 border rounded" value={editingItem.less1_sign || '-'} onChange={(e) => updateEditingLessSign('less1_sign', e.target.value)}><option value="-">-</option><option value="+">+</option></select>
+                <NumericInput name="less1" value={editingItem.less1} onChange={(_, val) => updateEditingItem('less1', val)} className="w-full px-2 py-2 border rounded text-right" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Less2</label>
+              <div className="flex gap-1">
+                <select className="w-12 px-1 py-2 border rounded" value={editingItem.less2_sign || '-'} onChange={(e) => updateEditingLessSign('less2_sign', e.target.value)}><option value="-">-</option><option value="+">+</option></select>
+                <NumericInput name="less2" value={editingItem.less2} onChange={(_, val) => updateEditingItem('less2', val)} className="w-full px-2 py-2 border rounded text-right" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Less3</label>
+              <div className="flex gap-1">
+                <select className="w-12 px-1 py-2 border rounded" value={editingItem.less3_sign || '+'} onChange={(e) => updateEditingLessSign('less3_sign', e.target.value)}><option value="+">+</option><option value="-">-</option></select>
+                <NumericInput name="less3" value={editingItem.less3} onChange={(_, val) => updateEditingItem('less3', val)} className="w-full px-2 py-2 border rounded text-right" />
+              </div>
+            </div>
+            <F label="Amount" name="amount" value={editingItem.amount} onChange={updateEditingItem} type="number" readOnly />
+          </div>
+          <div className="flex justify-end gap-2 mt-5 pt-4 border-t">
+            <button onClick={() => { setEditingItem(null); setEditingItemIdx(null); }} className="px-4 py-2 text-sm bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300">Cancel</button>
+            <button onClick={saveEditingItem} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Save Changes</button>
+          </div>
+        </div>
+      </div>
+    )}
+
+        {/* Browse Lots Modal */}
+        {showLotModal && (
+          <LotBrowseModal
+            lotItems={opts.lot_items || []}
+            filters={lotFilters}
+            onFilterChange={(key, val) => setLotFilters((p) => ({ ...p, [key]: val }))}
+            onSelect={(lotNo) => { setLotFromMaster(lotNo); setShowLotModal(false); setLotFilters({}); }}
+            onClose={() => { setShowLotModal(false); setLotFilters({}); }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+const LOT_COLS = [
+  { key: 'lot_no', label: 'Lot No' },
+  { key: 'item_name', label: 'Item Name' },
+  { key: 'shape', label: 'Shape' },
+  { key: 'color', label: 'Color' },
+  { key: 'clarity', label: 'Clarity' },
+  { key: 'size', label: 'Size' },
+  { key: 'sieve_mm', label: 'Sieve' },
+  { key: 'opening_weight_carats', label: 'Weight' },
+];
+
+function LotBrowseModal({ lotItems, filters, onFilterChange, onSelect, onClose }) {
+  const [sortDir, setSortDir] = useState('desc');
+  const filtered = lotItems.filter((lot) =>
+    LOT_COLS.every(({ key }) => {
+      const f = String(filters[key] || '').trim().toLowerCase();
+      return !f || String(lot[key] || '').toLowerCase().includes(f);
+    })
+  );
+  const sorted = [...filtered].sort((a, b) => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return dir * String(a.lot_no ?? '').localeCompare(String(b.lot_no ?? ''), undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-5xl mx-4 flex flex-col max-h-[85vh]">
+        <div className="flex items-center justify-between px-5 py-4 border-b">
+          <h2 className="text-lg font-semibold text-gray-800">Browse Lots</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+        </div>
+        <div className="overflow-auto flex-1">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 sticky top-0 z-10">
+              <tr>
+                {LOT_COLS.map(({ key, label }) => (
+                  <th key={label} className="text-left px-3 py-2 text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">
+                    {key === 'lot_no' ? (
+                      <button onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')} className="flex items-center gap-1 hover:text-blue-600 uppercase tracking-wide">
+                        {label} <span className="text-xs normal-case font-normal">{sortDir === 'asc' ? '▲' : '▼'}</span>
+                      </button>
+                    ) : label}
+                  </th>
+                ))}
+                <th className="px-3 py-2" />
+              </tr>
+              <tr className="bg-white border-b">
+                {LOT_COLS.map(({ key }) => (
+                  <td key={key} className="px-2 py-1">
+                    <input
+                      type="text"
+                      placeholder="filter"
+                      value={filters[key] || ''}
+                      onChange={(e) => onFilterChange(key, e.target.value)}
+                      className="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    />
+                  </td>
+                ))}
+                <td className="px-2 py-1">
+                  <button
+                    onClick={() => LOT_COLS.forEach(({ key }) => onFilterChange(key, ''))}
+                    className="text-xs text-gray-400 hover:text-red-500 whitespace-nowrap"
+                  >Clear</button>
+                </td>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr><td colSpan={LOT_COLS.length + 1} className="text-center py-8 text-gray-400">No lots found</td></tr>
+              )}
+              {sorted.map((lot) => (
+                <tr key={lot.lot_no} className="border-t border-gray-100 hover:bg-blue-50">
+                  <td className="px-3 py-2">{lot.lot_no}</td>
+                  <td className="px-3 py-2">{lot.item_name}</td>
+                  <td className="px-3 py-2">{lot.shape}</td>
+                  <td className="px-3 py-2">{lot.color}</td>
+                  <td className="px-3 py-2">{lot.clarity}</td>
+                  <td className="px-3 py-2">{lot.size}</td>
+                  <td className="px-3 py-2">{lot.sieve_mm}</td>
+                  <td className="px-3 py-2 text-right">{lot.opening_weight_carats}</td>
+                  <td className="px-3 py-2">
+                    <button
+                      onClick={() => onSelect(lot.lot_no)}
+                      className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                    >Select</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-5 py-3 border-t text-xs text-gray-400">{filtered.length} lot{filtered.length !== 1 ? 's' : ''} shown</div>
       </div>
     </div>
   );

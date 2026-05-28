@@ -8,7 +8,7 @@ import PartyField, { BrokerField } from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { INIT_LINE_ITEM, applyLotAutoFields, calculateTotals, getCurrencyDefaults, normalizeLineItem } from '../utils/parcelTransactionCalc';
 import NumericInput from '../components/NumericInput';
-import { fmtAmt } from '../utils/format';
+import { fmtAmt, fmtDate } from '../utils/format';
 import F from '../components/FormField';
 
 const INIT_ITEM = INIT_LINE_ITEM;
@@ -166,7 +166,7 @@ export default function SaleReturnPage() {
         return p;
       });
     }
-    const found = (opts.lot_items || []).find((l) => l.lot_no === lotNo);
+    const found = (opts.lot_items || []).find((l) => String(l.lot_no) === String(lotNo));
     setForm((p) => {
       const line = found ? applyLotAutoFields(lotDraft, found) : { ...lotDraft, lot_number: lotNo };
       setLotDraft(normalizeLineItem(line, { currency: p.currency, inrRate: p.inr_rate, aedRate: p.usd_rate }));
@@ -269,7 +269,7 @@ export default function SaleReturnPage() {
                     </td>
                     <td className="px-3 py-2">{r.invoice_number}</td>
                     <td className="px-3 py-2">{r.bill_no}</td>
-                    <td className="px-3 py-2">{r.date}</td>
+                    <td className="px-3 py-2">{fmtDate(r.date)}</td>
                     <td className="px-3 py-2">{r.party}</td>
                     <td className="px-3 py-2">{r.purchase_type}</td>
                     <td className="px-3 py-2">{r.sub_type}</td>
@@ -279,7 +279,7 @@ export default function SaleReturnPage() {
                     <td className="px-3 py-2">{r.currency}</td>
                     <td className="px-3 py-2 text-right">{fmtAmt(r.inr_amt)}</td>
                     <td className="px-3 py-2 text-right">{fmtAmt(r.usd_amt)}</td>
-                    <td className="px-3 py-2">{r.due_date || ''}</td>
+                    <td className="px-3 py-2">{fmtDate(r.due_date)}</td>
                     <td className="px-3 py-2">{r.payment_status}</td>
                   </tr>
                 ))}
@@ -311,8 +311,8 @@ export default function SaleReturnPage() {
           <F label="Due Days" name="due_days" value={form.due_days} onChange={setValue} type="number" />
           <F label="Due Date" name="due_date" value={form.due_date} onChange={setValue} type="date" />
           <F label="Currency" name="currency" value={form.currency} onChange={setValue} options={opts.currencies} />
-          <F label="INR *" name="inr_rate" value={form.inr_rate} onChange={setValue} type="number" />
-          <F label="USD /" name="usd_rate" value={form.usd_rate} onChange={setValue} type="number" />
+          <F label="INR *" name="inr_rate" value={form.inr_rate} onChange={setValue} type="number" disabled={form.currency === 'INR'} />
+          <F label="USD /" name="usd_rate" value={form.usd_rate} onChange={setValue} type="number" disabled={form.currency === 'USD'} />
           <PartyField name="comm_agent" label="Comm.Agent" value={form.comm_agent} onChange={setValue} options={opts.parties} />
           <F label="Com %" name="com_pct" value={form.com_pct} onChange={setValue} type="number" />
           <F label="Com Amount" name="com_amount" value={form.com_amount} onChange={setValue} type="number" />

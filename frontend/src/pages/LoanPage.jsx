@@ -8,7 +8,7 @@ import ListPageControls from '../components/ListPageControls';
 import PartyField, { BrokerField } from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { getCurrencyDefaults } from '../utils/parcelTransactionCalc';
-import { fmtAmt } from '../utils/format';
+import { fmtAmt, fmtDate } from '../utils/format';
 
 const INIT = {
   loan_type: 'Given',
@@ -174,7 +174,7 @@ export default function LoanPage({ loanType: propLoanType }) {
                 ) : pagedRows.map(r => (
                   <tr key={r.id} className="border-b hover:bg-gray-50">
                     <td className="px-4 py-3">{r.inv_no}</td>
-                    <td className="px-4 py-3">{r.date}</td>
+                    <td className="px-4 py-3">{fmtDate(r.date)}</td>
                     <td className="px-4 py-3 font-medium">{r.party}</td>
                     <td className="px-4 py-3">{r.currency}</td>
                     <td className="px-4 py-3">{fmtAmt(r.amount)}</td>

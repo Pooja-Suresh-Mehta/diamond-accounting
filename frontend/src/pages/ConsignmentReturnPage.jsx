@@ -9,7 +9,7 @@ import PartyField from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { INIT_LINE_ITEM, applyLotAutoFields, calculateTotals, getCurrencyDefaults, normalizeLineItem } from '../utils/parcelTransactionCalc';
 import NumericInput from '../components/NumericInput';
-import { fmtAmt } from '../utils/format';
+import { fmtAmt, fmtDate } from '../utils/format';
 
 const INIT_ITEM = { ...INIT_LINE_ITEM };
 
@@ -119,7 +119,7 @@ export default function ConsignmentReturnPage() {
         if (i !== idx) return item;
         const raw = { ...item, [name]: itemNumericFields.has(name) ? (value === '' ? 0 : Number(value)) : value };
         if (name === 'lot_number') {
-          const lot = (opts.lot_items || []).find(l => l.lot_no === value);
+          const lot = (opts.lot_items || []).find(l => String(l.lot_no) === String(value));
           return lot ? applyLotAutoFields(raw, lot) : raw;
         }
         return normalizeLineItem(raw, { currency: f.currency, inrRate: f.inr_rate, aedRate: f.usd_rate, sourceField: name });
@@ -205,7 +205,7 @@ export default function ConsignmentReturnPage() {
                   <tr key={r.id} className="border-b hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium">{r.invoice_number}</td>
                     <td className="px-4 py-3">{r.source_consignment_number}</td>
-                    <td className="px-4 py-3">{r.date}</td>
+                    <td className="px-4 py-3">{fmtDate(r.date)}</td>
                     <td className="px-4 py-3">{r.party}</td>
                     <td className="px-4 py-3">{fmtAmt(r.usd_amt)}</td>
                     <td className="px-4 py-3 flex gap-2">

@@ -36,7 +36,7 @@ function applyCommas(raw) {
  *   className  - input className
  *   onFocus / onBlur - optional passthrough handlers
  */
-export default function NumericInput({ value, onChange, name, className, onFocus, onBlur, forceDecimal = false }) {
+export default function NumericInput({ value, onChange, name, className, onFocus, onBlur, forceDecimal = false, disabled = false }) {
   const inputRef = useRef(null);
   const [display, setDisplay] = useState('');
 
@@ -49,6 +49,7 @@ export default function NumericInput({ value, onChange, name, className, onFocus
   }, [value]);
 
   const handleChange = (e) => {
+    if (disabled) return;
     const input = e.target;
     const cursorPos = input.selectionStart;
     const rawInput = input.value;
@@ -120,6 +121,7 @@ export default function NumericInput({ value, onChange, name, className, onFocus
       onChange={handleChange}
       onFocus={handleFocus}
       onBlur={handleBlur}
+      disabled={disabled}
       className={className}
     />
   );

@@ -1,14 +1,17 @@
 import { useState, useRef, useEffect } from 'react';
 import NumericInput from './NumericInput';
+import DateInput from './DateInput';
 import { fmtAmt } from '../utils/format';
 
 export default function FormField({
   label, name, value, onChange, options = [], type = 'text',
-  searchable = false, readOnly = false, onAddNew, onBlur, forceDecimal = false,
+  searchable = false, readOnly = false, disabled = false, onAddNew, onBlur, forceDecimal = false,
 }) {
-  const cls = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none';
+  const cls = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none disabled:bg-gray-100 disabled:cursor-not-allowed';
   const shouldSearch = options.length > 0 && (searchable || options.length > 10);
   const isNumber = type === 'number';
+  const isDate = type === 'date';
+  const isReadOnly = readOnly || disabled;
 
   if (shouldSearch) {
     return (
@@ -24,7 +27,7 @@ export default function FormField({
           options={options}
           onChange={(v) => onChange(name, v)}
           placeholder={`Search ${label}`}
-          readOnly={readOnly}
+          readOnly={isReadOnly}
         />
       </div>
     );
@@ -39,22 +42,29 @@ export default function FormField({
         )}
       </div>
       {options.length ? (
-        <select value={value || ''} onChange={(e) => onChange(name, e.target.value)} disabled={readOnly} className={cls}>
+        <select value={value || ''} onChange={(e) => onChange(name, e.target.value)} disabled={isReadOnly} className={cls}>
           <option value="">Select {label}</option>
           {options.map((o) => <option key={o} value={o}>{o}</option>)}
         </select>
       ) : (
-        readOnly && isNumber ? (
+        isReadOnly && isNumber ? (
           <input type="text" value={fmtAmt(value)} readOnly className={cls} />
         ) : isNumber ? (
-          <NumericInput name={name} value={value} onChange={onChange} className={cls} forceDecimal={forceDecimal} />
+          <NumericInput name={name} value={value} onChange={onChange} className={cls} forceDecimal={forceDecimal} disabled={disabled} />
+        ) : isDate ? (
+          <DateInput
+            value={value || ''}
+            onChange={(v) => onChange(name, v)}
+            className={cls}
+            readOnly={isReadOnly}
+          />
         ) : (
           <input
             type="text"
             value={value ?? ''}
             onChange={(e) => onChange(name, e.target.value)}
             onBlur={onBlur ? (e) => onBlur(name, e.target.value) : undefined}
-            readOnly={readOnly}
+            readOnly={isReadOnly}
             className={cls}
           />
         )

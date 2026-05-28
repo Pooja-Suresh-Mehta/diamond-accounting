@@ -20,21 +20,21 @@ from app.utils import (
 
 async def _validate_lot_numbers(db: AsyncSession, company_id: str, items: list):
     """Ensure every purchase item references an existing parcel master lot."""
-    lot_numbers = [str(i.lot_number).strip() for i in items if getattr(i, "lot_number", None) and str(i.lot_number).strip()]
+    lot_numbers = [i.lot_number for i in items if getattr(i, "lot_number", None) is not None]
     if not lot_numbers:
         return
-    existing = (await db.execute(
+    existing_raw = (await db.execute(
         select(ParcelMaster.lot_no).where(
             ParcelMaster.company_id == company_id,
-            func.lower(ParcelMaster.lot_no).in_([ln.lower() for ln in lot_numbers]),
+            ParcelMaster.lot_no.in_(lot_numbers),
         )
     )).scalars().all()
-    existing_lower = {ln.lower() for ln in existing}
-    missing = [ln for ln in lot_numbers if ln.lower() not in existing_lower]
+    existing_set = {int(v) for v in existing_raw if v is not None}
+    missing = [ln for ln in lot_numbers if ln not in existing_set]
     if missing:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Lot number(s) not found in Parcel Master: {', '.join(missing)}. Please create the parcel entry first.",
+            detail=f"Lot number(s) not found in Parcel Master: {', '.join(str(m) for m in missing)}. Please create the parcel entry first.",
         )
 
 router = APIRouter(prefix="/api/parcel/purchase", tags=["parcel-purchase"])
@@ -82,6 +82,7 @@ async def get_purchase_options(
             ParcelMaster.merged_into_lot_no == None,  # noqa: E711 — only active (non-absorbed) lots
         ).order_by(ParcelMaster.lot_no)
     )).scalars().all()
+    parcel_rows = sorted(parcel_rows, key=lambda r: int(str(r.lot_no)) if r.lot_no and str(r.lot_no).isdigit() else 0)
     next_inv = await next_number(db, ParcelPurchase, ParcelPurchase.invoice_number, current_user.company_id)
     return {
         "types": PURCHASE_TYPES,
@@ -150,7 +151,7 @@ async def download_template():
 @router.get("", response_model=list[ParcelPurchaseOut])
 async def list_purchases(
     search: str | None = Query(default=None),
-    lot_number: str | None = Query(default=None),
+    lot_number: int | None = Query(default=None),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=500),
     current_user: User = Depends(get_current_user),
@@ -165,10 +166,8 @@ async def list_purchases(
             ParcelPurchase.party.ilike(like)
         )
     if lot_number:
-        like = f"%{lot_number.strip()}%"
-        # Filter purchases that have items with matching lot numbers
         q = q.where(
-            ParcelPurchase.items.any(ParcelPurchaseItem.lot_number.ilike(like))
+            ParcelPurchase.items.any(ParcelPurchaseItem.lot_number == lot_number)
         )
     q = q.order_by(ParcelPurchase.created_at.desc())
     q = q.offset((page - 1) * page_size).limit(page_size)

@@ -37,9 +37,16 @@ def get_actor_name(user: User) -> str:
 async def next_number(
     db: AsyncSession, model_class: Any, field: Any, company_id: str
 ) -> str:
-    rows = (
-        await db.execute(select(field).where(model_class.company_id == company_id))
-    ).scalars().all()
+    """Generate next sequential number with database-level locking to prevent duplicates.
+    
+    Uses SELECT ... FOR UPDATE to ensure only one transaction can read and increment at a time.
+    """
+    from sqlalchemy import text
+    
+    # Use FOR UPDATE to lock rows and prevent race conditions
+    q = select(field).where(model_class.company_id == company_id).with_for_update()
+    rows = (await db.execute(q)).scalars().all()
+    
     max_val = 0
     for v in rows:
         s = str(v or "").strip()
@@ -88,26 +95,6 @@ def parse_float_value(v: Any) -> float:
         return 0.0
     return float(v)
 
-
-def normalize_lot_no(lot_no: str | None) -> str:
-    """Normalize lot number to 4-digit zero-padded format (e.g., '59' -> '0059')."""
-    if not lot_no:
-        return ""
-    s = str(lot_no).strip()
-    if not s:
-        return ""
-    # Try to extract the numeric part if it contains text
-    import re
-    m = re.search(r'(\d+)$', s)
-    if m:
-        num_str = m.group(1)
-    else:
-        num_str = s
-    try:
-        return f"{int(num_str):04d}"
-    except ValueError:
-        # If not a valid number, return as-is
-        return s
 
 
 

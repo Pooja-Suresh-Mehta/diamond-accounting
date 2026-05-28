@@ -40,7 +40,7 @@ async def parcel_stock_report(
     color_group: Optional[str] = Query(default=None),
     clarity: Optional[str] = Query(default=None),
     size: Optional[str] = Query(default=None),
-    lot_no: Optional[str] = Query(default=None),
+    lot_no: Optional[int] = Query(default=None),
     cut: Optional[str] = Query(default=None),
     show: Optional[str] = Query(default=None),
     hold_status: Optional[str] = Query(default=None),
@@ -96,8 +96,7 @@ async def parcel_stock_report(
     if size:
         q = q.where(ParcelMaster.size.ilike(f"%{size}%"))
     if lot_no:
-        like = f"%{lot_no}%"
-        q = q.where(ParcelMaster.lot_no.ilike(like) | ParcelMaster.item_name.ilike(like))
+        q = q.where((ParcelMaster.lot_no == lot_no) | ParcelMaster.item_name.ilike(f"%{lot_no}%"))
     if cut:
         q = q.where(ParcelMaster.cut.ilike(f"%{cut}%"))
     if lab:
@@ -434,7 +433,7 @@ async def parcel_purchase_report(
     color: Optional[str] = Query(default=None),
     clarity: Optional[str] = Query(default=None),
     sieve: Optional[str] = Query(default=None),
-    lot_no: Optional[str] = Query(default=None),
+    lot_no: Optional[int] = Query(default=None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -466,12 +465,24 @@ async def parcel_purchase_report(
     if sieve:
         q = q.where(ParcelPurchaseItem.sieve.ilike(f"%{sieve}%"))
     if lot_no:
-        q = q.where(ParcelPurchaseItem.lot_number.ilike(f"%{lot_no}%"))
+        q = q.where(ParcelPurchaseItem.lot_number == lot_no)
     q = q.order_by(ParcelPurchase.date.desc(), ParcelPurchase.invoice_number)
 
     rows = (await db.execute(q)).all()
     result = []
     for purchase, item in rows:
+        # Compute per-item INR and USD amounts on-the-fly from the stored item amount
+        # item.amount is always in the purchase currency (INR for INR purchases, USD for USD purchases)
+        _inr_rate = float(purchase.inr_rate or 85)
+        _amt = float(item.amount or 0)
+        _currency = (purchase.currency or "USD").upper()
+        if _currency == "INR":
+            _item_inr_amt = round(_amt, 2)
+            _item_usd_amt = round(_amt / _inr_rate, 2) if _inr_rate > 0 else 0.0
+        else:  # USD (or any other foreign currency)
+            _item_usd_amt = round(_amt, 2)
+            _item_inr_amt = round(_amt * _inr_rate, 2)
+
         result.append({
             "purchase_id": purchase.id,
             "date": purchase.date,
@@ -480,6 +491,7 @@ async def parcel_purchase_report(
             "party": purchase.party,
             "broker": purchase.broker,
             "currency": purchase.currency,
+            "inr_rate": purchase.inr_rate,
             "lot_number": item.lot_number,
             "item_name": item.item_name,
             "shape": item.shape,
@@ -493,9 +505,10 @@ async def parcel_purchase_report(
             "selected_carat": item.selected_carat,
             "pcs": item.pcs,
             "rate": item.rate,
+            "usd_rate": item.usd_rate,
             "amount": item.amount,
-            "inr_amt": purchase.inr_amt,
-            "usd_amt": purchase.usd_amt,
+            "inr_amt": _item_inr_amt,
+            "usd_amt": _item_usd_amt,
             "less1": item.less1,
             "less2": item.less2,
             "less3": item.less3,
@@ -506,7 +519,8 @@ async def parcel_purchase_report(
         "results": result,
         "totals": {
             "selected_carat": round(sum(r["selected_carat"] or 0 for r in result), 2),
-            "amount": round(sum(r["amount"] or 0 for r in result), 2),
+            "inr_amt": round(sum(r["inr_amt"] or 0 for r in result), 2),
+            "usd_amt": round(sum(r["usd_amt"] or 0 for r in result), 2),
         }
     }
 
@@ -526,7 +540,7 @@ async def parcel_memo_out_report(
     color: Optional[str] = Query(default=None),
     clarity: Optional[str] = Query(default=None),
     sieve: Optional[str] = Query(default=None),
-    lot_no: Optional[str] = Query(default=None),
+    lot_no: Optional[int] = Query(default=None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -546,7 +560,7 @@ async def parcel_memo_out_report(
     if inv_no:
         q = q.where(MemoOut.invoice_number.ilike(f"%{inv_no}%"))
     if lot_no:
-        q = q.where(MemoOutItem.lot_number.ilike(f"%{lot_no}%"))
+        q = q.where(MemoOutItem.lot_number == lot_no)
     q = q.order_by(MemoOut.date.desc())
 
     rows = (await db.execute(q)).all()
@@ -593,7 +607,7 @@ async def parcel_sale_report(
     color: Optional[str] = Query(default=None),
     clarity: Optional[str] = Query(default=None),
     sieve: Optional[str] = Query(default=None),
-    lot_no: Optional[str] = Query(default=None),
+    lot_no: Optional[int] = Query(default=None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -623,7 +637,7 @@ async def parcel_sale_report(
     if size:
         q = q.where(SaleItem.size.ilike(f"%{size}%"))
     if lot_no:
-        q = q.where(SaleItem.lot_number.ilike(f"%{lot_no}%"))
+        q = q.where(SaleItem.lot_number == lot_no)
     q = q.order_by(Sale.date.desc())
 
     rows = (await db.execute(q)).all()
@@ -675,7 +689,7 @@ async def parcel_consignment_report(
     color: Optional[str] = Query(default=None),
     clarity: Optional[str] = Query(default=None),
     sieve: Optional[str] = Query(default=None),
-    lot_no: Optional[str] = Query(default=None),
+    lot_no: Optional[int] = Query(default=None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -701,7 +715,7 @@ async def parcel_consignment_report(
     if clarity:
         q = q.where(ConsignmentItem.clarity.ilike(f"%{clarity}%"))
     if lot_no:
-        q = q.where(ConsignmentItem.lot_number.ilike(f"%{lot_no}%"))
+        q = q.where(ConsignmentItem.lot_number == lot_no)
     q = q.order_by(Consignment.date.desc())
 
     rows = (await db.execute(q)).all()
@@ -791,7 +805,7 @@ async def parcel_purchase_return_report(
     color: Optional[str] = Query(default=None),
     clarity: Optional[str] = Query(default=None),
     sieve: Optional[str] = Query(default=None),
-    lot_no: Optional[str] = Query(default=None),
+    lot_no: Optional[int] = Query(default=None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -812,7 +826,7 @@ async def parcel_purchase_return_report(
         term = memo_no or inv_no
         q = q.where(ParcelPurchaseReturn.memo_number.ilike(f"%{term}%"))
     if lot_no:
-        q = q.where(ParcelPurchaseReturnItem.lot_number.ilike(f"%{lot_no}%"))
+        q = q.where(ParcelPurchaseReturnItem.lot_number == lot_no)
     q = q.order_by(ParcelPurchaseReturn.date.desc())
 
     rows = (await db.execute(q)).all()
@@ -858,7 +872,7 @@ async def parcel_sale_return_report(
     color: Optional[str] = Query(default=None),
     clarity: Optional[str] = Query(default=None),
     sieve: Optional[str] = Query(default=None),
-    lot_no: Optional[str] = Query(default=None),
+    lot_no: Optional[int] = Query(default=None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -878,7 +892,7 @@ async def parcel_sale_return_report(
     if inv_no:
         q = q.where(SaleReturn.invoice_number.ilike(f"%{inv_no}%"))
     if lot_no:
-        q = q.where(SaleReturnItem.lot_number.ilike(f"%{lot_no}%"))
+        q = q.where(SaleReturnItem.lot_number == lot_no)
     q = q.order_by(SaleReturn.date.desc())
 
     rows = (await db.execute(q)).all()
@@ -917,7 +931,7 @@ async def parcel_memo_out_return_report(
     to_date: Optional[date_type] = Query(default=None),
     party: Optional[str] = Query(default=None),
     inv_no: Optional[str] = Query(default=None),
-    lot_no: Optional[str] = Query(default=None),
+    lot_no: Optional[int] = Query(default=None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -935,7 +949,7 @@ async def parcel_memo_out_return_report(
     if inv_no:
         q = q.where(MemoOutReturn.invoice_number.ilike(f"%{inv_no}%"))
     if lot_no:
-        q = q.where(MemoOutReturnItem.lot_number.ilike(f"%{lot_no}%"))
+        q = q.where(MemoOutReturnItem.lot_number == lot_no)
     q = q.order_by(MemoOutReturn.date.desc())
 
     rows = (await db.execute(q)).all()
@@ -974,7 +988,7 @@ async def parcel_consignment_return_report(
     to_date: Optional[date_type] = Query(default=None),
     party: Optional[str] = Query(default=None),
     inv_no: Optional[str] = Query(default=None),
-    lot_no: Optional[str] = Query(default=None),
+    lot_no: Optional[int] = Query(default=None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -992,7 +1006,7 @@ async def parcel_consignment_return_report(
     if inv_no:
         q = q.where(ConsignmentReturn.invoice_number.ilike(f"%{inv_no}%"))
     if lot_no:
-        q = q.where(ConsignmentReturnItem.lot_number.ilike(f"%{lot_no}%"))
+        q = q.where(ConsignmentReturnItem.lot_number == lot_no)
     q = q.order_by(ConsignmentReturn.date.desc())
 
     rows = (await db.execute(q)).all()
@@ -1023,6 +1037,175 @@ async def parcel_consignment_return_report(
     }
 
 
+# ── Detailed Stock Report ────────────────────────────────
+
+@router.get("/detailed-stock")
+async def parcel_detailed_stock_report(
+    lot_no: str = Query(...),
+    currency: str = Query(default="USD"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from datetime import date as _date
+    currency = currency.upper()
+
+    def _item_rate_amt(item_rate, item_usd_rate, carats, tx_inr_rate):
+        """
+        Return (rate_in_target_currency, amount_in_target_currency).
+
+        item_rate     : per-carat rate in the transaction's own currency
+        item_usd_rate : per-carat rate in USD (pre-computed and stored at save time)
+        carats        : selected_carat
+        tx_inr_rate   : header.inr_rate = "INR per 1 unit of transaction currency"
+                        USD txn  → 85   (1 USD = 85 INR)
+                        INR txn  → 1    (1 INR = 1 INR)
+                        AED txn  → 25   (1 AED = 25 INR)
+        """
+        ct = float(carats or 0)
+        if currency == "USD":
+            rate = float(item_usd_rate or 0)
+        else:  # INR
+            # item_rate is in transaction currency; multiply by tx_inr_rate → INR
+            rate = float(item_rate or 0) * float(tx_inr_rate or 1)
+        return round(rate, 2), round(rate * ct, 2)
+
+    # 1. Opening stock from ParcelMaster
+    pm = (await db.execute(
+        select(ParcelMaster).where(
+            ParcelMaster.company_id == current_user.company_id,
+            ParcelMaster.lot_no == lot_no,
+        )
+    )).scalar_one_or_none()
+
+    rows = []
+    running_ct = 0.0
+    running_amt = 0.0
+
+    if pm:
+        running_ct = float(pm.opening_weight_carats or 0)
+        if currency == "INR":
+            running_amt = float(pm.purchase_cost_inr_amount or 0)
+        else:
+            running_amt = float(pm.purchase_cost_usd_amount or 0)
+        running_rate = round(running_amt / running_ct, 2) if running_ct > 0 else 0.0
+        rows.append({
+            "date": None,
+            "lot_no": lot_no,
+            "state": "Opening Stock",
+            "purchase_id": None,
+            "sale_id": None,
+            "invoice_number": None,
+            "p_ct": None, "p_rate": None, "p_amt": None,
+            "s_ct": None, "s_rate": None, "s_amt": None,
+            "curr_ct": round(running_ct, 3),
+            "curr_rate": running_rate,
+            "curr_amt": round(running_amt, 2),
+        })
+
+    # 2. Purchase items
+    purchase_rows = (await db.execute(
+        select(ParcelPurchase, ParcelPurchaseItem)
+        .join(ParcelPurchaseItem, ParcelPurchaseItem.purchase_id == ParcelPurchase.id)
+        .where(
+            ParcelPurchase.company_id == current_user.company_id,
+            ParcelPurchaseItem.lot_number == lot_no,
+        )
+        .order_by(ParcelPurchase.date, ParcelPurchase.created_at)
+    )).all()
+
+    # 3. Sale items
+    sale_rows = (await db.execute(
+        select(Sale, SaleItem)
+        .join(SaleItem, SaleItem.sale_id == Sale.id)
+        .where(
+            Sale.company_id == current_user.company_id,
+            SaleItem.lot_number == lot_no,
+        )
+        .order_by(Sale.date, Sale.created_at)
+    )).all()
+
+    # Build transactions list
+    transactions = []
+    for purchase, item in purchase_rows:
+        p_ct = float(item.selected_carat or 0)
+        p_rate, p_amt = _item_rate_amt(item.rate, item.usd_rate, p_ct, purchase.inr_rate)
+        _p_usd_rate = float(item.usd_rate or 0)
+        _p_inr_rate = float(item.rate or 0) * float(purchase.inr_rate or 1)
+        transactions.append({
+            "date": purchase.date,
+            "lot_no": lot_no,
+            "state": "Purchase",
+            "purchase_id": purchase.id,
+            "sale_id": None,
+            "invoice_number": purchase.invoice_number,
+            "p_ct": round(p_ct, 3), "p_rate": p_rate, "p_amt": p_amt,
+            "p_amt_usd": round(_p_usd_rate * p_ct, 2),
+            "p_amt_inr": round(_p_inr_rate * p_ct, 2),
+            "s_ct": None, "s_rate": None, "s_amt": None,
+            "s_amt_usd": None, "s_amt_inr": None,
+            "_delta_ct": p_ct, "_delta_amt": p_amt, "_type": "purchase",
+        })
+
+    for sale, item in sale_rows:
+        s_ct = float(item.selected_carat or 0)
+        s_rate, s_amt = _item_rate_amt(item.rate, item.usd_rate, s_ct, sale.inr_rate)
+        _s_usd_rate = float(item.usd_rate or 0)
+        _s_inr_rate = float(item.rate or 0) * float(sale.inr_rate or 1)
+        transactions.append({
+            "date": sale.date,
+            "lot_no": lot_no,
+            "state": "Sale",
+            "purchase_id": None,
+            "sale_id": sale.id,
+            "invoice_number": sale.invoice_number,
+            "p_ct": None, "p_rate": None, "p_amt": None,
+            "p_amt_usd": None, "p_amt_inr": None,
+            "s_ct": round(s_ct, 3), "s_rate": s_rate, "s_amt": s_amt,
+            "s_amt_usd": round(_s_usd_rate * s_ct, 2),
+            "s_amt_inr": round(_s_inr_rate * s_ct, 2),
+            "_delta_ct": s_ct, "_delta_amt": s_amt, "_type": "sale",
+        })
+
+    # Sort by date, with purchases before sales on the same day
+    transactions.sort(key=lambda x: (x["date"] or _date.min, 0 if x["_type"] == "purchase" else 1))
+
+    # Compute running curr columns
+    for txn in transactions:
+        if txn["_type"] == "purchase":
+            running_ct += txn["_delta_ct"]
+            running_amt += txn["_delta_amt"]
+        else:
+            running_ct -= txn["_delta_ct"]
+            running_amt -= txn["_delta_amt"]
+        txn["curr_ct"] = round(running_ct, 3)
+        txn["curr_rate"] = round(running_amt / running_ct, 2) if running_ct > 0 else 0.0
+        txn["curr_amt"] = round(running_amt, 2)
+        del txn["_delta_ct"]
+        del txn["_delta_amt"]
+        del txn["_type"]
+
+    rows.extend(transactions)
+
+    # Total row
+    total_p_ct = sum(r["p_ct"] for r in rows if r["p_ct"] is not None)
+    total_p_amt = sum(r["p_amt"] for r in rows if r["p_amt"] is not None)
+    total_s_ct = sum(r["s_ct"] for r in rows if r["s_ct"] is not None)
+    total_s_amt = sum(r["s_amt"] for r in rows if r["s_amt"] is not None)
+
+    total_row = {
+        "date": None, "lot_no": None, "state": "Total",
+        "p_ct": round(total_p_ct, 3),
+        "p_rate": round(total_p_amt / total_p_ct, 2) if total_p_ct > 0 else 0.0,
+        "p_amt": round(total_p_amt, 2),
+        "s_ct": round(total_s_ct, 3),
+        "s_rate": round(total_s_amt / total_s_ct, 2) if total_s_ct > 0 else 0.0,
+        "s_amt": round(total_s_amt, 2),
+        "curr_ct": None, "curr_rate": None, "curr_amt": None,
+    }
+
+    return {"rows": rows, "total": total_row, "lot_no": lot_no, "currency": currency}
+
+
 # ── Options (filter dropdowns shared by all parcel reports) ──
 
 @router.get("/options")
@@ -1048,12 +1231,12 @@ async def parcel_report_options(
         .order_by(AccountMaster.account_group_name)
     )).scalars().all()
 
-    lot_nos = (await db.execute(
+    lot_nos_raw = (await db.execute(
         select(ParcelMaster.lot_no)
         .where(ParcelMaster.company_id == current_user.company_id, ParcelMaster.lot_no.isnot(None))
         .distinct()
-        .order_by(ParcelMaster.lot_no)
     )).scalars().all()
+    lot_nos = sorted((str(v) for v in lot_nos_raw if v is not None), key=lambda x: int(x) if x.isdigit() else 0)
 
     all_opt_rows = (await db.execute(
         select(DropdownOption.field_name, DropdownOption.value, DropdownOption.is_suppressed)
@@ -1081,5 +1264,5 @@ async def parcel_report_options(
         "clarities": _active(CLARITIES, "clarity"),
         "sizes": _active(SIZES, "size"),
         "sieves": _active(SIEVES, "sieve"),
-        "lot_nos": list(lot_nos),
+        "lot_nos": lot_nos,
     }

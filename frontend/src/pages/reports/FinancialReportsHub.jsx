@@ -7,7 +7,8 @@ import { Search } from 'lucide-react';
 import api from '../../api';
 import toast from 'react-hot-toast';
 import ReportPage from './ReportPage';
-import { fmtAmt } from '../../utils/format';
+import { fmtAmt, fmtDate } from '../../utils/format';
+import DateInput from '../../components/DateInput';
 
 const CURRENCIES = ['USD', 'INR', 'AED'];
 const TYPE_OPTIONS = ['LOCAL', 'IMPORT', 'EXPORT'];
@@ -60,7 +61,7 @@ function SalePurchaseSummary() {
         {DATE_FILTERS.map(f => (
           <div key={f.key} className="space-y-1">
             <label className="text-xs font-medium text-gray-600">{f.label}</label>
-            <input type="date" value={filters[f.key]} onChange={e => setFilters(v => ({ ...v, [f.key]: e.target.value }))}
+            <DateInput value={filters[f.key]} onChange={v => setFilters(prev => ({ ...prev, [f.key]: v }))}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
           </div>
         ))}
@@ -146,7 +147,7 @@ function SalePurchaseSummary() {
                   <tbody>
                     {rows.map((r, i) => (
                       <tr key={i} className="border-b hover:bg-gray-50">
-                        <td className="px-3 py-2">{r.date}</td>
+                        <td className="px-3 py-2">{fmtDate(r.date)}</td>
                         <td className="px-3 py-2">{r.invoice_number}</td>
                         <td className="px-3 py-2">{r.party}</td>
                         <td className="px-3 py-2">{r.total_carats}</td>
@@ -196,7 +197,7 @@ function AccountLedger() {
         {DATE_FILTERS.map(f => (
           <div key={f.key} className="space-y-1">
             <label className="text-xs font-medium text-gray-600">{f.label}</label>
-            <input type="date" value={filters[f.key]} onChange={e => setFilters(v => ({ ...v, [f.key]: e.target.value }))}
+            <DateInput value={filters[f.key]} onChange={v => setFilters(prev => ({ ...prev, [f.key]: v }))}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
           </div>
         ))}
@@ -241,7 +242,7 @@ function AccountLedger() {
                   <tr><td colSpan={6} className="text-center text-gray-400 py-8">No entries</td></tr>
                 ) : data.entries.map((e, i) => (
                   <tr key={e.id || i} className="border-b hover:bg-gray-50">
-                    <td className="px-3 py-2">{e.date}</td>
+                    <td className="px-3 py-2">{fmtDate(e.date)}</td>
                     <td className="px-3 py-2">{e.transaction_type}</td>
                     <td className="px-3 py-2">{e.account_name}</td>
                     <td className="px-3 py-2">{e.debit ? fmtAmt(e.debit) : '—'}</td>
@@ -282,7 +283,7 @@ function MonthlyExpense() {
         {DATE_FILTERS.map(f => (
           <div key={f.key} className="space-y-1">
             <label className="text-xs font-medium text-gray-600">{f.label}</label>
-            <input type="date" value={filters[f.key]} onChange={e => setFilters(v => ({ ...v, [f.key]: e.target.value }))}
+            <DateInput value={filters[f.key]} onChange={v => setFilters(prev => ({ ...prev, [f.key]: v }))}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
           </div>
         ))}
@@ -364,7 +365,7 @@ function CashFlow() {
         {DATE_FILTERS.map(f => (
           <div key={f.key} className="space-y-1">
             <label className="text-xs font-medium text-gray-600">{f.label}</label>
-            <input type="date" value={filters[f.key]} onChange={e => setFilters(v => ({ ...v, [f.key]: e.target.value }))}
+            <DateInput value={filters[f.key]} onChange={v => setFilters(prev => ({ ...prev, [f.key]: v }))}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
           </div>
         ))}
@@ -445,7 +446,7 @@ function ProfitLoss() {
         {DATE_FILTERS.map(f => (
           <div key={f.key} className="space-y-1">
             <label className="text-xs font-medium text-gray-600">{f.label}</label>
-            <input type="date" value={filters[f.key]} onChange={e => setFilters(v => ({ ...v, [f.key]: e.target.value }))}
+            <DateInput value={filters[f.key]} onChange={v => setFilters(prev => ({ ...prev, [f.key]: v }))}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
           </div>
         ))}
@@ -548,7 +549,7 @@ function TrialBalance() {
         {DATE_FILTERS.map(f => (
           <div key={f.key} className="space-y-1">
             <label className="text-xs font-medium text-gray-600">{f.label}</label>
-            <input type="date" value={filters[f.key]} onChange={e => setFilters(v => ({ ...v, [f.key]: e.target.value }))}
+            <DateInput value={filters[f.key]} onChange={v => setFilters(prev => ({ ...prev, [f.key]: v }))}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
           </div>
         ))}
@@ -621,7 +622,7 @@ function BalanceSheet() {
         {DATE_FILTERS.map(f => (
           <div key={f.key} className="space-y-1">
             <label className="text-xs font-medium text-gray-600">{f.label}</label>
-            <input type="date" value={filters[f.key]} onChange={e => setFilters(v => ({ ...v, [f.key]: e.target.value }))}
+            <DateInput value={filters[f.key]} onChange={v => setFilters(prev => ({ ...prev, [f.key]: v }))}
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
           </div>
         ))}

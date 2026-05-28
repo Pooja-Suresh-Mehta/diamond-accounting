@@ -7,7 +7,7 @@ import F from '../components/FormField';
 import ListPageControls from '../components/ListPageControls';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { getCurrencyDefaults } from '../utils/parcelTransactionCalc';
-import { fmtAmt } from '../utils/format';
+import { fmtAmt, fmtDate } from '../utils/format';
 
 const INIT = {
   date: getCurrentDateISO(),
@@ -175,7 +175,7 @@ export default function IncomeExpensePage() {
                       <button onClick={() => handleDelete(r.id)} className="text-red-600 hover:underline text-xs">Delete</button>
                     </td>
                     <td className="px-4 py-3 text-gray-500 text-xs font-mono">{r.id?.slice(0, 8)}</td>
-                    <td className="px-4 py-3">{r.date}</td>
+                    <td className="px-4 py-3">{fmtDate(r.date)}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-0.5 rounded text-xs font-medium ${r.ie_type === 'Income' ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'}`}>
                         {r.ie_type}

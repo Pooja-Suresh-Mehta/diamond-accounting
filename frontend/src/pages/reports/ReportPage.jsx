@@ -9,9 +9,18 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { Search, Columns } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api from '../../api';
 import toast from 'react-hot-toast';
 import { fmtAmt } from '../../utils/format';
+import SearchableSelect from '../../components/SearchableSelect';
+
+// Returns true when INR value is NOT within ±20% of USD*90
+function inrUsdMismatch(inr, usd) {
+  if (!inr || !usd) return false;
+  const expected = usd * 90;
+  return inr < expected * 0.8 || inr > expected * 1.2;
+}
 
 export default function ReportPage({ title, endpoint, filters: filterDefs, columns, totalKeys = [], extraParams = {} }) {
   const initFilters = Object.fromEntries((filterDefs || []).map(f => [f.key, f.type === 'checkbox' ? false : '']));
@@ -130,11 +139,12 @@ export default function ReportPage({ title, endpoint, filters: filterDefs, colum
                     {(f.options || []).map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 ) : f.type === 'api-select' ? (
-                  <select value={filters[f.key]} onChange={e => set(f.key, e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
-                    <option value="">All</option>
-                    {(filterOptions[f.optionsKey] || []).map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
+                  <SearchableSelect
+                    value={filters[f.key]}
+                    options={filterOptions[f.optionsKey] || []}
+                    onChange={v => set(f.key, v)}
+                    placeholder={`Search ${f.label}...`}
+                  />
                 ) : f.type === 'textarea' ? (
                   <textarea value={filters[f.key]} onChange={e => set(f.key, e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" placeholder={f.placeholder || f.label} rows={3} />
@@ -179,9 +189,20 @@ export default function ReportPage({ title, endpoint, filters: filterDefs, colum
                   <tr><td colSpan={visibleCols.length} className="text-center text-gray-400 py-8">No results found</td></tr>
                 ) : results.map((row, i) => (
                   <tr key={row.id || i} className="border-b hover:bg-gray-50">
-                    {visibleCols.map(c => (
-                      <td key={c.key} className="px-3 py-2 whitespace-nowrap">{fmt(c, row)}</td>
-                    ))}
+                    {visibleCols.map(c => {
+                      const mismatch =
+                        (c.key === 'inr_amt' || c.key === 'usd_amt') &&
+                        inrUsdMismatch(row.inr_amt, row.usd_amt);
+                      return (
+                        <td key={c.key} className={`px-3 py-2 whitespace-nowrap${mismatch ? ' bg-red-100 text-red-700' : ''}`}>
+                          {c.link ? (
+                            <Link to={c.link(row[c.key], row)} className="text-blue-600 hover:underline font-medium">
+                              {fmt(c, row)}
+                            </Link>
+                          ) : fmt(c, row)}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>

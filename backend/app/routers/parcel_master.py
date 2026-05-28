@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime as dt
-import re
 
 from app.auth import get_current_user
 from app.constants import (
@@ -19,7 +18,6 @@ from app.schemas import (
     ParcelMasterCreate, ParcelMasterFinalOut, ParcelMasterOut, ParcelMasterSimilarResponse,
     ParcelMasterUpdate, ParcelMergeLogOut,
 )
-from app.utils import normalize_lot_no
 
 router = APIRouter(prefix="/api/parcel-master", tags=["parcel-master"])
 
@@ -45,10 +43,10 @@ def _actor_name(current_user: User) -> str:
     return ((current_user.full_name or "").strip() or (current_user.username or "").strip() or "User")
 
 
-async def _ensure_unique_lot(db: AsyncSession, company_id: str, lot_no: str, exclude_id: str | None = None):
+async def _ensure_unique_lot(db: AsyncSession, company_id: str, lot_no: int, exclude_id: str | None = None):
     q = select(ParcelMaster.id).where(
         ParcelMaster.company_id == company_id,
-        func.lower(ParcelMaster.lot_no) == lot_no.strip().lower(),
+        ParcelMaster.lot_no == lot_no,
     )
     if exclude_id:
         q = q.where(ParcelMaster.id != exclude_id)
@@ -105,10 +103,12 @@ async def list_parcels(
     if not include_merged:
         q = q.where(ParcelMaster.merged_into_lot_no == None)  # noqa: E711
     if search:
-        q = q.where(
-            ParcelMaster.lot_no.ilike(f"%{search.strip()}%") |
-            ParcelMaster.item_name.ilike(f"%{search.strip()}%")
-        )
+        s = search.strip()
+        try:
+            lot_int = int(s)
+            q = q.where((ParcelMaster.lot_no == lot_int) | ParcelMaster.item_name.ilike(f"%{s}%"))
+        except ValueError:
+            q = q.where(ParcelMaster.item_name.ilike(f"%{s}%"))
     q = q.order_by(ParcelMaster.lot_no.desc()).offset((page - 1) * page_size).limit(page_size)
     rows = (await db.execute(q)).scalars().all()
     return [ParcelMasterOut.model_validate(r) for r in rows]
@@ -122,12 +122,8 @@ async def next_lot_number(
     lot_nos = (await db.execute(
         select(ParcelMaster.lot_no).where(ParcelMaster.company_id == current_user.company_id)
     )).scalars().all()
-    max_num = 0
-    for lot in lot_nos:
-        m = re.search(r'(\d+)$', lot.strip())
-        if m:
-            max_num = max(max_num, int(m.group(1)))
-    return {"lot_no": f"{max_num + 1:04d}"}
+    max_num = max((int(lot) for lot in lot_nos if lot), default=0)
+    return {"lot_no": max_num + 1}
 
 
 _SIMILARITY_FIELDS = [
@@ -286,7 +282,7 @@ async def merge_parcel(
             )
 
     # Snapshot the values being contributed by the absorbed lot
-    merged_lot_no = absorbed.lot_no if absorbed else (payload.lot_no or "")
+    merged_lot_no = absorbed.lot_no if absorbed else (payload.lot_no or 0)
     merged_weight = float(absorbed.opening_weight_carats if absorbed else payload.opening_weight_carats or 0)
     merged_cost_inr = float(absorbed.purchase_cost_inr_amount if absorbed else payload.purchase_cost_inr_amount or 0)
     merged_cost_usd = float(absorbed.purchase_cost_usd_amount if absorbed else payload.purchase_cost_usd_amount or 0)
@@ -401,10 +397,12 @@ async def list_parcels_final(
         )
     )
     if search:
-        q = q.where(
-            ParcelMaster.lot_no.ilike(f"%{search.strip()}%") |
-            ParcelMaster.item_name.ilike(f"%{search.strip()}%")
-        )
+        s = search.strip()
+        try:
+            lot_int = int(s)
+            q = q.where((ParcelMaster.lot_no == lot_int) | ParcelMaster.item_name.ilike(f"%{s}%"))
+        except ValueError:
+            q = q.where(ParcelMaster.item_name.ilike(f"%{s}%"))
     q = q.order_by(ParcelMaster.lot_no.desc()).offset((page - 1) * page_size).limit(page_size)
     parcels = (await db.execute(q)).scalars().all()
 
@@ -501,7 +499,6 @@ async def create_parcel(
     db: AsyncSession = Depends(get_db),
 ):
     # Normalize lot number
-    payload.lot_no = normalize_lot_no(payload.lot_no)
     await _ensure_unique_lot(db, current_user.company_id, payload.lot_no)
     row = ParcelMaster(company_id=current_user.company_id, **payload.model_dump())
     row.created_by_name = _actor_name(current_user)
@@ -528,7 +525,6 @@ async def update_parcel(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parcel item not found")
 
     # Normalize lot number
-    payload.lot_no = normalize_lot_no(payload.lot_no)
     await _ensure_unique_lot(db, current_user.company_id, payload.lot_no, exclude_id=parcel_id)
     for k, v in payload.model_dump().items():
         setattr(row, k, v)

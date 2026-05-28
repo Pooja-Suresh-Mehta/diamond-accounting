@@ -7,7 +7,7 @@ import F from '../components/FormField';
 import ListPageControls from '../components/ListPageControls';
 import { getCurrentDateISO } from '../utils/dateDefaults';
 import { getCurrencyDefaults } from '../utils/parcelTransactionCalc';
-import { fmtAmt } from '../utils/format';
+import { fmtAmt, fmtDate } from '../utils/format';
 
 const INIT = {
   vtype: 'Journal',
@@ -157,7 +157,7 @@ export default function JournalEntriesPage() {
                   <tr><td colSpan={9} className="text-center py-8 text-gray-400">No records</td></tr>
                 ) : pagedRows.map(r => (
                   <tr key={r.id} className="border-b hover:bg-gray-50">
-                    <td className="px-4 py-3">{r.date}</td>
+                    <td className="px-4 py-3">{fmtDate(r.date)}</td>
                     <td className="px-4 py-3">{r.vtype}</td>
                     <td className="px-4 py-3">{r.credit_account}</td>
                     <td className="px-4 py-3 font-medium">{r.debit_account}</td>

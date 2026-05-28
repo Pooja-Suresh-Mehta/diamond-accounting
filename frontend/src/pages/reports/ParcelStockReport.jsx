@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import api from '../../api';
 import toast from 'react-hot-toast';
 import { getCurrentDateISO } from '../../utils/dateDefaults';
+import DateInput from '../../components/DateInput';
+import SearchableSelect from '../../components/SearchableSelect';
 
 // ── Reusable filter components ───────────────────────────
 
@@ -51,9 +53,9 @@ function DateRangeRow({ label, enabled, onToggle, fromVal, toVal, onFromChange, 
     <div className="flex items-center gap-3">
       <input type="checkbox" checked={enabled} onChange={e => onToggle(e.target.checked)} className="w-4 h-4 text-blue-600 rounded" />
       <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide w-36 shrink-0">{label}</label>
-      <input type="date" value={fromVal || ''} onChange={e => onFromChange(e.target.value)} disabled={!enabled} className={cls} />
+      <DateInput value={fromVal || ''} onChange={onFromChange} disabled={!enabled} className={cls} />
       <span className="text-xs text-gray-400">to</span>
-      <input type="date" value={toVal || ''} onChange={e => onToChange(e.target.value)} disabled={!enabled} className={cls} />
+      <DateInput value={toVal || ''} onChange={onToChange} disabled={!enabled} className={cls} />
     </div>
   );
 }
@@ -72,11 +74,16 @@ function SelectField({ label, value, onChange, options }) {
 }
 
 function TextField({ label, value, onChange, type = 'text', placeholder = '' }) {
+  const cls = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none';
   return (
     <div className="space-y-1">
       <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
-      <input type={type} value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)}
-        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none" />
+      {type === 'date' ? (
+        <DateInput value={value || ''} onChange={onChange} className={cls} />
+      ) : (
+        <input type="text" value={value || ''} placeholder={placeholder} onChange={e => onChange(e.target.value)}
+          className={cls} />
+      )}
     </div>
   );
 }
@@ -106,7 +113,7 @@ const getInitFilters = () => {
 
 // ── Result table columns ─────────────────────────────────
 
-const COLS = [
+const BASE_COLS = [
   { key: 'cur_status',             label: 'Status' },
   { key: 'created_date',           label: 'Date' },
   { key: 'lot_no',                 label: 'LotNo' },
@@ -125,20 +132,31 @@ const COLS = [
   { key: 'purchased_weight',       label: 'Purch Wt', num: true },
   { key: 'sold_weight',            label: 'Sold Wt', num: true },
   { key: 'on_memo_weight',         label: 'Memo Wt', num: true },
-  { key: 'consignment_weight',     label: 'Consign Wt', num: true },
   { key: 'on_hand_weight',         label: 'On Hand', num: true },
-  { key: 'purchase_price',         label: 'Purch Price', num: true },
-  { key: 'purchase_price_currency',label: 'Currency' },
-  { key: 'usd_to_inr_rate',        label: 'USD/INR Rate', num: true },
-  { key: 'purchase_cost_usd_carat',label: 'Cost USD/Ct', num: true },
-  { key: 'purchase_cost_inr_carat',label: 'Cost INR/Ct', num: true },
-  { key: 'purchase_cost_usd_amount',label: 'Cost USD Amt', num: true },
-  { key: 'purchase_cost_inr_amount',label: 'Cost INR Amt', num: true },
-  { key: 'asking_price_usd_carats',label: 'Ask USD/Ct', num: true },
-  { key: 'asking_price_inr_carats',label: 'Ask INR/Ct', num: true },
+  { key: 'purchase_cost_carat_display', label: 'Cost /Ct', num: true },
+  { key: 'purchase_cost_amount_display', label: 'Cost Amt', num: true },
+  { key: 'asking_price_carat_display', label: 'Ask /Ct', num: true },
   { key: 'asking_usd_amount',      label: 'Ask USD Amt', num: true },
   { key: 'asking_inr_amount',      label: 'Ask INR Amt', num: true },
 ];
+
+// INR columns and their paired USD column for sanity check
+const INR_USD_PAIRS = {
+  asking_price_inr_carats:  'asking_price_usd_carats',
+  asking_inr_amount:        'asking_usd_amount',
+};
+// Reverse map so USD cells are also highlighted on mismatch
+const USD_INR_PAIRS = {
+  asking_price_usd_carats: 'asking_price_inr_carats',
+  asking_usd_amount:       'asking_inr_amount',
+};
+
+// Returns true when INR value is NOT within ±20% of USD*90
+function inrUsdMismatch(inr, usd) {
+  if (!inr || !usd) return false;
+  const expected = usd * 90;
+  return inr < expected * 0.8 || inr > expected * 1.2;
+}
 
 // ── Main component ───────────────────────────────────────
 
@@ -147,6 +165,7 @@ export default function ParcelStockReport() {
   const [activeTab, setActiveTab] = useState(0);
   const [filters, setFilters] = useState(getInitFilters());
   const [options, setOptions] = useState(null);
+  const [lotNos, setLotNos] = useState([]);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState('search'); // 'search' | 'results'
@@ -156,6 +175,7 @@ export default function ParcelStockReport() {
   const [colFilters, setColFilters] = useState({});
   const [showMorePopup, setShowMorePopup] = useState(false);
   const [moreTab, setMoreTab] = useState('location');
+  const [displayCurrency, setDisplayCurrency] = useState('USD');
   const [hiddenCols, setHiddenCols] = useState(new Set());
   const [showColChooser, setShowColChooser] = useState(false);
   const colChooserRef = useRef(null);
@@ -165,6 +185,7 @@ export default function ParcelStockReport() {
 
   useEffect(() => {
     api.get('/parcel-master/options').then(res => setOptions(res.data)).catch(() => {});
+    api.get('/parcel-reports/options').then(res => setLotNos((res.data.lot_nos || []).map(String))).catch(() => {});
   }, []);
 
   const update = (key, val) => setFilters(prev => ({ ...prev, [key]: val }));
@@ -220,19 +241,58 @@ export default function ParcelStockReport() {
 
   const handleClear = () => { setFilters(getInitFilters()); setData(null); setView('search'); };
 
+  const getRate = (row) => Number(row?.usd_to_inr_rate || 90) || 90;
+
+  const getCurrencyValue = (row, usdKey, inrKey) => {
+    const usd = Number(row?.[usdKey] || 0);
+    const inr = Number(row?.[inrKey] || 0);
+    const rate = getRate(row);
+
+    if (displayCurrency === 'USD') {
+      return usd || (rate > 0 ? inr / rate : 0);
+    }
+    return inr || usd * rate;
+  };
+
+  const cols = useMemo(() => BASE_COLS.map(col => {
+    if (col.key === 'purchase_cost_carat_display') {
+      return { ...col, label: `Cost /Ct (${displayCurrency})` };
+    }
+    if (col.key === 'purchase_cost_amount_display') {
+      return { ...col, label: `Cost Amt (${displayCurrency})` };
+    }
+    if (col.key === 'asking_price_carat_display') {
+      return { ...col, label: `Ask /Ct (${displayCurrency})` };
+    }
+    return col;
+  }), [displayCurrency]);
+
+  const getCellValue = (row, colKey) => {
+    if (colKey === 'purchase_cost_carat_display') {
+      return getCurrencyValue(row, 'purchase_cost_usd_carat', 'purchase_cost_inr_carat');
+    }
+    if (colKey === 'purchase_cost_amount_display') {
+      return getCurrencyValue(row, 'purchase_cost_usd_amount', 'purchase_cost_inr_amount');
+    }
+    if (colKey === 'asking_price_carat_display') {
+      return getCurrencyValue(row, 'asking_price_usd_carats', 'asking_price_inr_carats');
+    }
+    return row?.[colKey];
+  };
+
   // ── Filtered rows (client-side column filters) ──────────
   const filteredRows = useMemo(() => {
     if (!data?.results) return [];
     return data.results.filter(r =>
-      COLS.every(col => {
+      cols.every(col => {
         const f = colFilters[col.key];
         if (!f) return true;
-        return String(r[col.key] ?? '').toLowerCase().includes(f.toLowerCase());
+        return String(getCellValue(r, col.key) ?? '').toLowerCase().includes(f.toLowerCase());
       })
     );
-  }, [data, colFilters]);
+  }, [data, colFilters, cols]);
 
-  const visibleCols = useMemo(() => COLS.filter(c => !hiddenCols.has(c.key)), [hiddenCols]);
+  const visibleCols = useMemo(() => cols.filter(c => !hiddenCols.has(c.key)), [cols, hiddenCols]);
 
   // ── Selection helpers ────────────────────────────────────
   const allChecked = filteredRows.length > 0 && filteredRows.every(r => selected.has(r.id));
@@ -244,7 +304,7 @@ export default function ParcelStockReport() {
 
   const selRows = filteredRows.filter(r => selected.has(r.id));
   const selCarats = selRows.reduce((s, r) => s + (r.carats || 0), 0);
-  const selAmount = selRows.reduce((s, r) => s + (r.asking_usd_amount || 0), 0);
+  const selAmount = selRows.reduce((s, r) => s + getCurrencyValue(r, 'asking_usd_amount', 'asking_inr_amount'), 0);
   const selAvgRate = selCarats > 0 ? selAmount / selCarats : 0;
   const selLotNos = selRows.map(r => r.lot_no).join(', ');
 
@@ -255,15 +315,12 @@ export default function ParcelStockReport() {
   const totalOnHand = filteredRows.reduce((s, r) => s + (r.on_hand_weight || 0), 0);
   const totalMemo = filteredRows.reduce((s, r) => s + (r.on_memo_weight || 0), 0);
   const totalConsignment = filteredRows.reduce((s, r) => s + (r.consignment_weight || 0), 0);
-  const totalAmount = filteredRows.reduce((s, r) => s + (r.asking_usd_amount || 0), 0);
+  const totalAmount = filteredRows.reduce((s, r) => s + getCurrencyValue(r, 'asking_usd_amount', 'asking_inr_amount'), 0);
+  const totalCostAmount = filteredRows.reduce((s, r) => s + getCurrencyValue(r, 'purchase_cost_usd_amount', 'purchase_cost_inr_amount'), 0);
   const totalAskINR = filteredRows.reduce((s, r) => s + (r.asking_inr_amount || 0), 0);
-  const totalCostUSD = filteredRows.reduce((s, r) => s + (r.purchase_cost_usd_amount || 0), 0);
-  const totalCostINR = filteredRows.reduce((s, r) => s + (r.purchase_cost_inr_amount || 0), 0);
   const avgRate = totalCarats > 0 ? totalAmount / totalCarats : 0;
-  const avgCostUSDCt = totalCarats > 0 ? totalCostUSD / totalCarats : 0;
-  const avgCostINRCt = totalCarats > 0 ? totalCostINR / totalCarats : 0;
-  const avgAskUSDCt = totalCarats > 0 ? totalAmount / totalCarats : 0;
-  const avgAskINRCt = totalCarats > 0 ? totalAskINR / totalCarats : 0;
+  const avgCostCt = totalCarats > 0 ? totalCostAmount / totalCarats : 0;
+  const avgAskCt = totalCarats > 0 ? totalAmount / totalCarats : 0;
 
   // ── Export ───────────────────────────────────────────────
   const exportExcel = () => {
@@ -271,7 +328,7 @@ export default function ParcelStockReport() {
     const csvRows = [headers.join(',')];
     filteredRows.forEach(r => {
       csvRows.push(visibleCols.map(c => {
-        const v = r[c.key] ?? '';
+        const v = getCellValue(r, c.key) ?? '';
         return typeof v === 'string' && v.includes(',') ? `"${v}"` : v;
       }).join(','));
     });
@@ -334,6 +391,17 @@ export default function ParcelStockReport() {
             <h2 className="text-lg font-semibold text-gray-800">Parcel Stock Search — {filteredRows.length} records</h2>
           </div>
           <div className="flex gap-2 flex-wrap items-center">
+            <div className="flex items-center gap-2 px-2 py-1.5 bg-gray-100 rounded-lg">
+              <span className="text-xs font-semibold text-gray-600 uppercase">Currency</span>
+              <select
+                value={displayCurrency}
+                onChange={e => setDisplayCurrency(e.target.value)}
+                className="px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none"
+              >
+                <option value="USD">USD</option>
+                <option value="INR">INR</option>
+              </select>
+            </div>
             <div className="relative" ref={colChooserRef}>
               <button onClick={() => setShowColChooser(v => !v)}
                 className="flex items-center gap-1.5 px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 rounded-lg">
@@ -345,10 +413,10 @@ export default function ParcelStockReport() {
                     <span className="text-xs font-semibold text-gray-600 uppercase">Show/Hide Columns</span>
                     <div className="flex gap-2">
                       <button onClick={() => setHiddenCols(new Set())} className="text-xs text-blue-600 hover:underline">All</button>
-                      <button onClick={() => setHiddenCols(new Set(COLS.map(c => c.key)))} className="text-xs text-red-500 hover:underline">None</button>
+                      <button onClick={() => setHiddenCols(new Set(cols.map(c => c.key)))} className="text-xs text-red-500 hover:underline">None</button>
                     </div>
                   </div>
-                  {COLS.map(col => (
+                  {cols.map(col => (
                     <label key={col.key} className="flex items-center gap-2 py-1 cursor-pointer hover:bg-gray-50 rounded px-1">
                       <input
                         type="checkbox"
@@ -390,8 +458,8 @@ export default function ParcelStockReport() {
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex flex-wrap gap-4 text-sm">
             <span><strong>Tot Pcs:</strong> {selRows.length}</span>
             <span><strong>Carats:</strong> {selCarats.toFixed(3)}</span>
-            <span><strong>Amt Tot:</strong> {selAmount.toFixed(2)}</span>
-            <span><strong>Avg Rate:</strong> {selAvgRate.toFixed(2)}</span>
+            <span><strong>Amt Tot ({displayCurrency}):</strong> {selAmount.toFixed(2)}</span>
+            <span><strong>Avg Rate ({displayCurrency}/Ct):</strong> {selAvgRate.toFixed(2)}</span>
             {selLotNos && <span className="truncate max-w-xs"><strong>LotNos:</strong> {selLotNos}</span>}
           </div>
         )}
@@ -444,16 +512,30 @@ export default function ParcelStockReport() {
                         </span>
                       </td>
                     );
+                    if (col.key === 'lot_no') return (
+                      <td key={col.key} className="px-3 py-2">
+                        <button
+                          onClick={() => navigate(`/reports/parcel?tab=detailed-stock&lot_no=${encodeURIComponent(r.lot_no || '')}`)}
+                          className="text-blue-600 hover:underline font-medium"
+                        >{r.lot_no ?? ''}</button>
+                      </td>
+                    );
+                    const usdKey = INR_USD_PAIRS[col.key];
+                    const inrKey = USD_INR_PAIRS[col.key];
+                    const isMismatch =
+                      (usdKey != null && inrUsdMismatch(r[col.key], r[usdKey])) ||
+                      (inrKey != null && inrUsdMismatch(r[inrKey], r[col.key]));
+                    const val = getCellValue(r, col.key);
                     return (
-                      <td key={col.key} className={`px-3 py-2 ${col.num ? 'text-right' : ''}`}>
-                        {col.num ? (Number(r[col.key] || 0).toFixed(col.key.includes('weight') || col.key === 'carats' || col.key === 'opening_weight_carats' ? 3 : 2)) : (r[col.key] ?? '')}
+                      <td key={col.key} className={`px-3 py-2 ${col.num ? 'text-right' : ''}${isMismatch ? ' bg-red-100 text-red-700' : ''}`}>
+                        {col.num ? (Number(val || 0).toFixed(col.key.includes('weight') || col.key === 'carats' || col.key === 'opening_weight_carats' ? 3 : 2)) : (val ?? '')}
                       </td>
                     );
                   })}
                 </tr>
               ))}
               {filteredRows.length === 0 && (
-                <tr><td colSpan={COLS.length + 1} className="text-center py-8 text-gray-400">No records</td></tr>
+                <tr><td colSpan={visibleCols.length + 1} className="text-center py-8 text-gray-400">No records</td></tr>
               )}
             </tbody>
             {filteredRows.length > 0 && (
@@ -468,10 +550,9 @@ export default function ParcelStockReport() {
                       on_memo_weight: totalMemo.toFixed(3),
                       consignment_weight: totalConsignment.toFixed(3),
                       on_hand_weight: totalOnHand.toFixed(3),
+                      purchase_cost_amount_display: totalCostAmount.toFixed(2),
                       asking_usd_amount: totalAmount.toFixed(2),
                       asking_inr_amount: totalAskINR.toFixed(2),
-                      purchase_cost_usd_amount: totalCostUSD.toFixed(2),
-                      purchase_cost_inr_amount: totalCostINR.toFixed(2),
                     };
                     return (
                       <td key={col.key} className={`px-3 py-2 ${col.num ? 'text-right' : ''}`}>
@@ -484,10 +565,8 @@ export default function ParcelStockReport() {
                   <td className="px-3 py-2 text-right text-gray-600 whitespace-nowrap">Avg/Ct</td>
                   {visibleCols.map(col => {
                     const avgMap = {
-                      purchase_cost_usd_carat: avgCostUSDCt.toFixed(2),
-                      purchase_cost_inr_carat: avgCostINRCt.toFixed(2),
-                      asking_price_usd_carats: avgAskUSDCt.toFixed(2),
-                      asking_price_inr_carats: avgAskINRCt.toFixed(2),
+                      purchase_cost_carat_display: avgCostCt.toFixed(2),
+                      asking_price_carat_display: avgAskCt.toFixed(2),
                     };
                     return (
                       <td key={col.key} className={`px-3 py-2 ${col.num ? 'text-right' : ''}`}>
@@ -602,7 +681,10 @@ export default function ParcelStockReport() {
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <TextField label="Enter Lot No" value={filters.lot_no} onChange={v => update('lot_no', v)} placeholder="Search LotNo..." />
+                <div>
+                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Enter Lot No</label>
+                  <SearchableSelect value={filters.lot_no} options={lotNos} onChange={v => update('lot_no', v)} placeholder="Search LotNo..." />
+                </div>
                 <TextField label="Size" value={filters.size} onChange={v => update('size', v)} />
                 <TextField label="Sieve" value={filters.sieve} onChange={v => update('sieve', v)} />
               </div>

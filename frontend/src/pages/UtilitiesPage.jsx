@@ -8,7 +8,8 @@ import { Download, Upload, RefreshCw, ArrowLeftRight, FileSpreadsheet, Clipboard
 import api from '../api';
 import toast from 'react-hot-toast';
 import NumericInput from '../components/NumericInput';
-import { fmtAmt } from '../utils/format';
+import DateInput from '../components/DateInput';
+import { fmtAmt, fmtDate } from '../utils/format';
 
 const TABS = [
   { id: 'download-mrp',           label: '29 Download MRP' },
@@ -474,7 +475,7 @@ function StockTransfer() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="space-y-1">
               <label className="text-xs font-medium text-gray-600">Date</label>
-              <input type="date" value={form.date} onChange={e => set('date', e.target.value)}
+              <DateInput value={form.date} onChange={v => set('date', v)}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
             </div>
             <div className="space-y-1">
@@ -568,7 +569,7 @@ function StockTransfer() {
                   <td className="px-3 py-2">
                     <button className="text-blue-600 text-xs hover:underline">Edit</button>
                   </td>
-                  <td className="px-3 py-2">{r.date}</td>
+                  <td className="px-3 py-2">{fmtDate(r.date)}</td>
                   <td className="px-3 py-2">{r.from_lot}</td>
                   <td className="px-3 py-2">{r.f_lot_no}</td>
                   <td className="px-3 py-2">{r.f_item_rate}</td>
@@ -717,7 +718,7 @@ function StockTelly() {
         <div className="flex flex-wrap items-end gap-4">
           <div className="space-y-1">
             <label className="text-xs font-semibold text-gray-600 uppercase">Date</label>
-            <input type="date" value={filters.date} onChange={e => setF('date', e.target.value)}
+            <DateInput value={filters.date} onChange={v => setF('date', v)}
               className="px-3 py-2 text-sm border border-gray-300 rounded-md" />
           </div>
           <div className="space-y-1">

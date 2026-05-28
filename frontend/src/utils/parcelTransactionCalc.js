@@ -32,7 +32,7 @@ export const INIT_LINE_ITEM = {
 
 export const applyLotAutoFields = (item, lot) => ({
   ...item,
-  lot_number: lot?.lot_no || '',
+  lot_number: lot?.lot_no ?? null,
   item_name: lot?.item_name || '',
   shape: lot?.shape || '',
   color: lot?.color || '',

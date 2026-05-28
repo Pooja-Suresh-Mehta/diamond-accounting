@@ -10,3 +10,14 @@ export function fmtAmt(val, decimals = 2) {
     maximumFractionDigits: decimals,
   });
 }
+
+/**
+ * Format an ISO date string (yyyy-mm-dd) as dd-mm-yyyy for display.
+ * Returns '' for empty/null values.
+ */
+export function fmtDate(val) {
+  if (!val) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(val);
+  if (!m) return val;
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}

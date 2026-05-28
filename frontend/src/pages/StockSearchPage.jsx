@@ -3,6 +3,7 @@ import api from '../api';
 import toast from 'react-hot-toast';
 import { Search, RotateCcw, Download, Printer, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getCurrentDateISO } from '../utils/dateDefaults';
+import DateInput from '../components/DateInput';
 import { fmtAmt } from '../utils/format';
 
 // ── Filter chip component ─────────────────────────────
@@ -101,6 +102,8 @@ export default function StockSearchPage() {
   const [options, setOptions] = useState(null);
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [displayCurrency, setDisplayCurrency] = useState('USD');
+  const [usdToInrRate, setUsdToInrRate] = useState(85);
   const [page, setPage] = useState(1);
   const pageSize = 50;
 
@@ -146,6 +149,21 @@ export default function StockSearchPage() {
 
   const tabs = ['Basic & Grading', 'Numeric Search', 'Date Search', 'Report'];
 
+  const pickMoneyValue = (row, usdKey, inrKey) => {
+    const usdVal = row?.[usdKey];
+    const inrVal = row?.[inrKey];
+
+    if (displayCurrency === 'INR') {
+      if (inrVal !== null && inrVal !== undefined) return inrVal;
+      if (usdVal !== null && usdVal !== undefined) return usdVal * usdToInrRate;
+      return null;
+    }
+
+    if (usdVal !== null && usdVal !== undefined) return usdVal;
+    if (inrVal !== null && inrVal !== undefined && usdToInrRate > 0) return inrVal / usdToInrRate;
+    return null;
+  };
+
   if (!options) {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" /></div>;
   }
@@ -154,7 +172,29 @@ export default function StockSearchPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">Stock Search</h1>
-        <div className="flex gap-2">
+        <div className="flex items-end gap-2">
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Currency</label>
+            <select
+              value={displayCurrency}
+              onChange={e => setDisplayCurrency(e.target.value)}
+              className="px-2.5 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none bg-white"
+            >
+              <option value="USD">USD</option>
+              <option value="INR">INR</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">USD to INR</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={usdToInrRate}
+              onChange={e => setUsdToInrRate(e.target.value ? Number(e.target.value) : 0)}
+              className="w-28 px-2.5 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none"
+            />
+          </div>
           <button onClick={handleReset} className="flex items-center gap-1.5 px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 rounded-lg transition">
             <RotateCcw className="w-4 h-4" /> Reset
           </button>
@@ -200,7 +240,7 @@ export default function StockSearchPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Stock Till Date</label>
-                  <input type="date" value={filters.stock_till_date} onChange={e => update('stock_till_date', e.target.value)}
+                  <DateInput value={filters.stock_till_date} onChange={v => update('stock_till_date', v)}
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none" />
                 </div>
                 <div className="space-y-1">
@@ -322,12 +362,12 @@ export default function StockSearchPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">From Date</label>
-                  <input type="date" value={filters.date_from} onChange={e => update('date_from', e.target.value)}
+                  <DateInput value={filters.date_from} onChange={v => update('date_from', v)}
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none" />
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">To Date</label>
-                  <input type="date" value={filters.date_to} onChange={e => update('date_to', e.target.value)}
+                  <DateInput value={filters.date_to} onChange={v => update('date_to', v)}
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none" />
                 </div>
               </div>
@@ -390,7 +430,7 @@ export default function StockSearchPage() {
               <thead>
                 <tr className="bg-gray-50 text-left">
                   {['#', 'Lot No', 'Shape', 'Carats', 'Color', 'Clarity', 'Cut', 'Polish', 'Sym', 'Lab', 'Flou',
-                    'Rap', 'Back%', '$/ct', 'Total', 'Status', 'Cert No'].map(h => (
+                    `Rap (${displayCurrency})`, 'Back%', `${displayCurrency}/ct`, `Total (${displayCurrency})`, 'Status', 'Cert No'].map(h => (
                     <th key={h} className="px-3 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -409,10 +449,10 @@ export default function StockSearchPage() {
                     <td className="px-3 py-2">{d.symmetry}</td>
                     <td className="px-3 py-2">{d.lab}</td>
                     <td className="px-3 py-2">{d.fluorescence}</td>
-                    <td className="px-3 py-2 text-right">{d.rap_price?.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right">{fmtAmt(pickMoneyValue(d, 'rap_price', 'rap_price_inr'))}</td>
                     <td className="px-3 py-2 text-right text-red-600">{d.back_pct?.toFixed(1)}%</td>
-                    <td className="px-3 py-2 text-right">{d.price_per_carat?.toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right font-medium">${d.total_price?.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right">{fmtAmt(pickMoneyValue(d, 'price_per_carat', 'price_per_carat_inr'))}</td>
+                    <td className="px-3 py-2 text-right font-medium">{fmtAmt(pickMoneyValue(d, 'total_price', 'total_price_inr'))}</td>
                     <td className="px-3 py-2">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                         d.status === 'OnHand' ? 'bg-green-100 text-green-700' :
