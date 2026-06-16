@@ -3,7 +3,6 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Download, Plus, Save, Trash2 } from 'lucide-react';
 import api from '../api';
-import SearchableSelect from '../components/SearchableSelect';
 import ListPageControls from '../components/ListPageControls';
 import PartyField, { BrokerField } from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
@@ -104,6 +103,8 @@ export default function SalePage() {
   const [lotFilters, setLotFilters] = useState({});
   const [editingItemIdx, setEditingItemIdx] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
+  // { [idx]: { maxCarats, totalCarats } } — populated when save validation fails
+  const [overLimitItems, setOverLimitItems] = useState({});
 
   const loadRows = async () => {
     const res = await api.get('/sale', { params: { search, lot_number: lotNumberSearch || undefined } });
@@ -117,6 +118,11 @@ export default function SalePage() {
     ]);
     setOpts(saleRes.data);
     setMasterOpts({ sizes: masterRes.data.sizes || [], sieves: masterRes.data.sieves || [] });
+  };
+  const loadLotItems = async (asOf) => {
+    if (!asOf || !isValidIsoDate(asOf)) return;
+    const res = await api.get('/sale/options', { params: { as_of: asOf } });
+    setOpts((p) => ({ ...p, lot_items: res.data.lot_items, lot_numbers: res.data.lot_numbers }));
   };
   const loadNextInvoiceNumber = async () => {
     try {
@@ -159,6 +165,19 @@ export default function SalePage() {
       setForm((p) => ({ ...p, invoice_number: String(opts.next_invoice_number) }));
     }
   }, [opts.next_invoice_number, isAddMode]);
+  useEffect(() => {
+    if (isFormMode) loadLotItems(form.date).catch(() => {});
+  }, [form.date, isFormMode]);
+  useEffect(() => {
+    // When lot items are refreshed (date changed), update lotDraft's max carats if a lot is selected
+    if (lotDraft.lot_number) {
+      const found = (opts.lot_items || []).find((l) => l.lot_no === lotDraft.lot_number);
+      if (found) {
+        const maxCarats = Number(found.available_carats ?? found.opening_weight_carats ?? 0);
+        setLotDraft((prev) => ({ ...prev, _max_carats: maxCarats }));
+      }
+    }
+  }, [opts.lot_items]);
 
   const setValue = (name, value) => {
     setForm((p) => {
@@ -228,7 +247,7 @@ export default function SalePage() {
     setForm((p) => {
       const line = found ? applyLotAutoFields(lotDraft, found) : { ...lotDraft, lot_number: lotNo };
       const cogs = found ? Number(found.purchase_cost_price_usd_carats || 0) : 0;
-      const maxCarats = found ? Number(found.opening_weight_carats || 0) : 0;
+      const maxCarats = found ? Number(found.available_carats ?? found.opening_weight_carats ?? 0) : 0;
       setLotDraft({ ...normalizeLineItem(line, { currency: p.currency, inrRate: p.inr_rate, aedRate: p.usd_rate }), cogs, _max_carats: maxCarats });
       return p;
     });
@@ -239,7 +258,7 @@ export default function SalePage() {
     if (Number(lotDraft.issue_carats || 0) <= 0 || Number(lotDraft.rate || 0) <= 0) return toast.error('Issue Carats and Rate are required');
     const maxCarats = Number(lotDraft._max_carats || 0);
     if (maxCarats > 0 && Number(lotDraft.issue_carats || 0) > maxCarats) {
-      return toast.error(`Issue Carats cannot exceed purchased carats (${maxCarats.toFixed(2)} cts)`);
+      return toast.error(`Issue Carats cannot exceed available stock (${maxCarats.toFixed(2)} cts)`);
     }
     setForm((p) => ({
       ...p,
@@ -248,7 +267,10 @@ export default function SalePage() {
     setLotDraft({ ...INIT_ITEM });
   };
 
-  const removeSubmittedLot = (idx) => setForm((p) => ({ ...p, items: p.items.filter((_, i) => i !== idx) }));
+  const removeSubmittedLot = (idx) => {
+    setOverLimitItems({});
+    setForm((p) => ({ ...p, items: p.items.filter((_, i) => i !== idx) }));
+  };
 
   const updateEditingItem = (name, value) => {
     setEditingItem((prev) => {
@@ -285,6 +307,7 @@ export default function SalePage() {
       });
       return { ...p, items: updated };
     });
+    setOverLimitItems({});
     setEditingItem(null);
     setEditingItemIdx(null);
     toast.success('Item updated');
@@ -314,6 +337,33 @@ export default function SalePage() {
     if (!form.invoice_number.trim()) return toast.error('Invoice Number is required');
     const activeItems = form.items.filter((i) => String(i.lot_number || '').trim());
     if (!activeItems.length) return toast.error('Lot selection is required');
+
+    // Aggregate issue_carats per lot across all items and validate against available stock
+    const lotTotals = {};
+    form.items.forEach((item, idx) => {
+      const ln = String(item.lot_number || '').trim();
+      if (!ln) return;
+      if (!lotTotals[ln]) lotTotals[ln] = { total: 0, indices: [] };
+      lotTotals[ln].total += Number(item.issue_carats || 0);
+      lotTotals[ln].indices.push(idx);
+    });
+    const newOverLimit = {};
+    const errorMessages = [];
+    for (const [ln, { total, indices }] of Object.entries(lotTotals)) {
+      const lotInfo = (opts.lot_items || []).find((l) => String(l.lot_no) === ln);
+      if (!lotInfo) continue;
+      const maxCarats = Number(lotInfo.available_carats ?? lotInfo.opening_weight_carats ?? 0);
+      if (maxCarats > 0 && total > maxCarats + 0.0001) {
+        indices.forEach((i) => { newOverLimit[i] = { maxCarats, totalCarats: total }; });
+        errorMessages.push(`Lot ${ln}: ${total.toFixed(2)} cts entered but only ${maxCarats.toFixed(2)} cts available`);
+      }
+    }
+    if (errorMessages.length > 0) {
+      setOverLimitItems(newOverLimit);
+      toast.error(errorMessages.join('\n'), { duration: 6000 });
+      return;
+    }
+    setOverLimitItems({});
     setSaving(true);
     try {
       const payload = {
@@ -364,11 +414,12 @@ export default function SalePage() {
             </div>
             <div className="flex-1">
               <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Search by Lot No</label>
-              <SearchableSelect
+              <input
+                type="text"
+                placeholder="Enter lot number..."
                 value={lotNumberSearch}
-                options={(opts.lot_numbers || []).map(String)}
-                onChange={setLotNumberSearch}
-                placeholder="Select lot number..."
+                onChange={(e) => setLotNumberSearch(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none"
               />
             </div>
             <div className="pt-5">
@@ -543,9 +594,18 @@ export default function SalePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {form.items.map((it, idx) => (
-                    <tr key={`${it.lot_number}-${idx}`} className="border-t border-gray-100">
-                      <td className="px-2 py-2">{it.lot_number}</td>
+                  {form.items.map((it, idx) => {
+                    const overInfo = overLimitItems[idx];
+                    return (
+                    <tr key={`${it.lot_number}-${idx}`} className={overInfo ? 'bg-red-50 border-t border-red-200' : 'border-t border-gray-100'}>
+                      <td className="px-2 py-2">
+                        <span>{it.lot_number}</span>
+                        {overInfo && (
+                          <span className="ml-1 text-xs font-bold text-red-600" title={`Total ${overInfo.totalCarats.toFixed(2)} cts across entries exceeds available ${overInfo.maxCarats.toFixed(2)} cts`}>
+                            ⚠ Max {overInfo.maxCarats.toFixed(2)} cts
+                          </span>
+                        )}
+                      </td>
                       <td className="px-2 py-2">{it.item_name}</td>
                       <td className="px-2 py-2 text-right">{fmtAmt(it.issue_carats)}</td>
                       <td className="px-2 py-2 text-right">{fmtAmt(it.reje_pct)}</td>
@@ -564,7 +624,15 @@ export default function SalePage() {
                         <button onClick={() => removeSubmittedLot(idx)} className="text-red-600"><Trash2 className="w-4 h-4" /></button>
                       </td>
                     </tr>
-                  ))}
+                  );
+                  })}
+                  {Object.keys(overLimitItems).length > 0 && (
+                    <tr>
+                      <td colSpan={15} className="px-2 py-2 bg-red-50 text-red-700 text-xs font-semibold">
+                        ⚠ Highlighted rows exceed available stock for their lot. Please edit or remove them before submitting.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

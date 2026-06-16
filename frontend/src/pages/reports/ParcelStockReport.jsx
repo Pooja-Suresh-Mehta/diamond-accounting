@@ -179,6 +179,7 @@ export default function ParcelStockReport() {
   const [hiddenCols, setHiddenCols] = useState(new Set());
   const [showColChooser, setShowColChooser] = useState(false);
   const colChooserRef = useRef(null);
+  const [sort, setSort] = useState({ col: 'lot_no', dir: 'asc' });
   const [locationForm, setLocationForm] = useState({ city: '', state: '', country: '' });
   const [boxGroupForm, setBoxGroupForm] = useState({ box_name: '', group_name: '' });
   const [moreLoading, setMoreLoading] = useState(false);
@@ -293,6 +294,24 @@ export default function ParcelStockReport() {
   }, [data, colFilters, cols]);
 
   const visibleCols = useMemo(() => cols.filter(c => !hiddenCols.has(c.key)), [cols, hiddenCols]);
+
+  const handleSort = (key) => {
+    setSort(prev => prev.col === key ? { col: key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col: key, dir: 'asc' });
+  };
+
+  const sortedRows = useMemo(() => {
+    if (!sort.col) return filteredRows;
+    return [...filteredRows].sort((a, b) => {
+      const aVal = getCellValue(a, sort.col) ?? '';
+      const bVal = getCellValue(b, sort.col) ?? '';
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sort.dir === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      const aStr = String(aVal);
+      const bStr = String(bVal);
+      return sort.dir === 'asc' ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
+    });
+  }, [filteredRows, sort]);
 
   // ── Selection helpers ────────────────────────────────────
   const allChecked = filteredRows.length > 0 && filteredRows.every(r => selected.has(r.id));
@@ -473,8 +492,12 @@ export default function ParcelStockReport() {
                   <input type="checkbox" checked={allChecked} onChange={toggleAll} className="w-4 h-4" />
                 </th>
                 {visibleCols.map(col => (
-                  <th key={col.key} className="px-3 py-2 text-left font-medium text-gray-600 whitespace-nowrap">
-                    {col.label}
+                  <th key={col.key} onClick={() => handleSort(col.key)}
+                    className="px-3 py-2 text-left font-medium text-gray-600 whitespace-nowrap cursor-pointer select-none hover:bg-gray-100">
+                    <span className="inline-flex items-center gap-1">
+                      {col.label}
+                      <span className="text-gray-400 text-xs">{sort.col === col.key ? (sort.dir === 'asc' ? '↑' : '↓') : '⇅'}</span>
+                    </span>
                   </th>
                 ))}
               </tr>
@@ -495,7 +518,7 @@ export default function ParcelStockReport() {
               </tr>
             </thead>
             <tbody>
-              {filteredRows.map(r => (
+              {sortedRows.map(r => (
                 <tr key={r.id} className={`border-b hover:bg-gray-50 ${selected.has(r.id) ? 'bg-blue-50' : ''}`}>
                   <td className="px-3 py-2">
                     <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleRow(r.id)} className="w-4 h-4" />

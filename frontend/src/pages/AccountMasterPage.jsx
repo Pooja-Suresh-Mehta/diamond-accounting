@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Download, Plus, Save, Trash2, Pencil } from 'lucide-react';
+import { Download, Plus, Save, Trash2, Pencil, ChevronDown } from 'lucide-react';
 import api from '../api';
 import ListPageControls from '../components/ListPageControls';
 import NumericInput from '../components/NumericInput';
@@ -275,15 +275,18 @@ function PhoneField({ name, label, value, onChange, error }) {
   );
 }
 
-function SearchableBaseSelect({ name, value, options, onChange, onBlur, error, label }) {
+function SearchableBaseSelect({ name, value, options, onChange, onBlur, error, label, allowNew = false, onNewOption }) {
   const [query, setQuery] = useState(value || '');
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef(null);
-  const common = `w-full px-3 py-2 text-sm border rounded-md focus:ring-1 focus:ring-blue-500 outline-none ${error ? 'border-red-500' : 'border-gray-300'}`;
+  const common = `w-full pl-3 pr-8 py-2 text-sm border rounded-md focus:ring-1 focus:ring-blue-500 outline-none ${error ? 'border-red-500' : 'border-gray-300'}`;
 
   const filtered = query
     ? options.filter((o) => o.toLowerCase().includes(query.toLowerCase()))
     : options;
+
+  const exactMatch = options.some((o) => o.toLowerCase() === query.trim().toLowerCase());
+  const showAddNew = allowNew && query.trim() && !exactMatch;
 
   useEffect(() => { setQuery(value || ''); }, [value]);
   useEffect(() => {
@@ -296,6 +299,15 @@ function SearchableBaseSelect({ name, value, options, onChange, onBlur, error, l
 
   const select = (val) => { onChange(name, val); setQuery(val); setOpen(false); };
 
+  const handleAddNew = () => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    onChange(name, trimmed);
+    setQuery(trimmed);
+    setOpen(false);
+    onNewOption?.(name, trimmed);
+  };
+
   return (
     <div className="space-y-1">
       <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{label}</label>
@@ -306,9 +318,10 @@ function SearchableBaseSelect({ name, value, options, onChange, onBlur, error, l
           onFocus={() => setOpen(true)}
           onBlur={() => { setTimeout(() => setOpen(false), 150); onBlur?.(name); }}
           className={common}
-          placeholder="Search..."
+          placeholder={allowNew ? 'Search or type new...' : 'Search...'}
         />
-        {open && filtered.length > 0 && (
+        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+        {open && (filtered.length > 0 || showAddNew) && (
           <ul className="absolute z-50 w-full mt-1 max-h-48 overflow-auto bg-white border border-gray-200 rounded-md shadow-lg">
             {filtered.map((o) => (
               <li key={o} onMouseDown={() => select(o)}
@@ -316,6 +329,12 @@ function SearchableBaseSelect({ name, value, options, onChange, onBlur, error, l
                 {o}
               </li>
             ))}
+            {showAddNew && (
+              <li onMouseDown={handleAddNew}
+                className="px-3 py-2 text-sm cursor-pointer text-blue-600 hover:bg-blue-50 border-t border-gray-100 font-medium">
+                + Add "{query.trim()}" as new option
+              </li>
+            )}
           </ul>
         )}
       </div>
@@ -349,6 +368,16 @@ export default function AccountMasterPage() {
   const loadOptions = async () => {
     const res = await api.get('/account-master/options');
     setOptions(res.data);
+  };
+
+  const handleNewCountry = (_, newVal) => {
+    const normalized = newVal.trim().toUpperCase();
+    setOptions((prev) => ({
+      ...prev,
+      countries: prev.countries.includes(normalized)
+        ? prev.countries
+        : [...prev.countries, normalized].sort(),
+    }));
   };
 
   const loadRows = async () => {
@@ -561,7 +590,7 @@ export default function AccountMasterPage() {
         if (phoneFields.includes(name)) return <PhoneField key={name} name={name} label={label} value={form[name]} onChange={setValue} error={phoneErrors[name] || fieldErrors[name]} />;
         if (name === 'city' || name === 'shipping_city') return <BaseField key={name} name={name} label={label} value={form[name]} onChange={setValue} onBlur={handleBlur} options={options.cities} error={fieldErrors[name]} />;
         if (name === 'state' || name === 'shipping_state') return <BaseField key={name} name={name} label={label} value={form[name]} onChange={setValue} onBlur={handleBlur} options={options.states} error={fieldErrors[name]} />;
-        if (name === 'country' || name === 'shipping_country') return <BaseField key={name} name={name} label={label} value={form[name]} onChange={setValue} onBlur={handleBlur} options={options.countries} error={fieldErrors[name]} />;
+        if (name === 'country' || name === 'shipping_country') return <SearchableBaseSelect key={name} name={name} label={label} value={form[name]} onChange={setValue} onBlur={handleBlur} options={options.countries} error={fieldErrors[name]} allowNew onNewOption={handleNewCountry} />;
         if (name === 'through') return <BaseField key={name} name={name} label={label} value={form[name]} onChange={setValue} onBlur={handleBlur} options={options.brokers} error={fieldErrors[name]} />;
         return <BaseField key={name} name={name} label={label} value={form[name]} onChange={setValue} onBlur={handleBlur} error={fieldErrors[name]} />;
       })}
@@ -672,7 +701,7 @@ export default function AccountMasterPage() {
           <SearchableBaseSelect name="under_group_name" label="Under Group *" value={form.under_group_name} options={UNDER_GROUP_OPTIONS} onChange={setValue} onBlur={handleBlur} error={fieldErrors.under_group_name} />
           <BaseField name="account_type" label="Account Type *" value={form.account_type} onChange={setValue} onBlur={handleBlur} options={options.account_types} error={fieldErrors.account_type} />
           <BaseField name="currency" label="Currency" value={form.currency} onChange={setValue} onBlur={handleBlur} options={options.currencies} error={fieldErrors.currency} />
-          <BaseField name="country" label="Country" value={form.country} onChange={setValue} onBlur={handleBlur} options={options.countries} error={fieldErrors.country} />
+          <SearchableBaseSelect name="country" label="Country" value={form.country} onChange={setValue} onBlur={handleBlur} options={options.countries} error={fieldErrors.country} allowNew onNewOption={handleNewCountry} />
           <BaseField name="inr_base_rate" label="INR BaseRate" value={form.inr_base_rate} onChange={setValue} onBlur={handleBlur} error={fieldErrors.inr_base_rate} />
           <BaseField name="usd_base_rate" label="USD BaseRate" value={form.usd_base_rate} onChange={setValue} onBlur={handleBlur} error={fieldErrors.usd_base_rate} />
           <BaseField name="opening_balance" label="Opening Balance *" value={form.opening_balance} onChange={setValue} onBlur={handleBlur} error={fieldErrors.opening_balance} />

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Search } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../api';
@@ -61,7 +61,7 @@ const N = (val, decimals = 2) => (val === null || val === undefined) ? '' : fmtA
 const ROW_CLASSES = {
   'Opening Stock': 'bg-blue-50 font-medium',
   'Purchase': 'hover:bg-gray-50',
-  'Sale': 'bg-red-50 hover:bg-red-100',
+  'Sale': 'bg-orange-50 hover:bg-orange-100',
 };
 
 // Returns true when INR value is NOT within ±20% of USD*90
@@ -80,6 +80,7 @@ export default function ParcelDetailedStockReport() {
   const [lotOptions, setLotOptions] = useState([]);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [sort, setSort] = useState({ col: '', dir: 'asc' });
 
   useEffect(() => {
     api.get('/parcel-reports/options')
@@ -111,19 +112,37 @@ export default function ParcelDetailedStockReport() {
   const rows = data?.rows || [];
   const total = data?.total;
 
+  const handleSort = (key) => {
+    setSort(prev => prev.col === key ? { col: key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col: key, dir: 'asc' });
+  };
+
+  const sortedRows = useMemo(() => {
+    if (!sort.col) return rows;
+    return [...rows].sort((a, b) => {
+      const aVal = a[sort.col] ?? '';
+      const bVal = b[sort.col] ?? '';
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sort.dir === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      const aStr = String(aVal);
+      const bStr = String(bVal);
+      return sort.dir === 'asc' ? aStr.localeCompare(bStr) : bStr.localeCompare(aStr);
+    });
+  }, [rows, sort]);
+
   const COLS = [
-    { label: 'Date',       align: 'left'  },
-    { label: 'Lot No.',    align: 'left'  },
-    { label: 'State',      align: 'left'  },
-    { label: 'P Ct',       align: 'right' },
-    { label: 'P Rate',     align: 'right' },
-    { label: `P Amt (${data?.currency || currency})`, align: 'right' },
-    { label: 'S Ct',       align: 'right' },
-    { label: 'S Rate',     align: 'right' },
-    { label: `S Amt (${data?.currency || currency})`, align: 'right' },
-    { label: 'Curr Ct',   align: 'right' },
-    { label: 'Curr Rate', align: 'right' },
-    { label: `Curr Amt (${data?.currency || currency})`, align: 'right' },
+    { key: 'date',      label: 'Date',       align: 'left'  },
+    { key: 'lot_no',    label: 'Lot No.',     align: 'left'  },
+    { key: 'state',     label: 'State',       align: 'left'  },
+    { key: 'p_ct',      label: 'P Ct',        align: 'right' },
+    { key: 'p_rate',    label: 'P Rate',      align: 'right' },
+    { key: 'p_amt',     label: `P Amt (${data?.currency || currency})`, align: 'right' },
+    { key: 's_ct',      label: 'S Ct',        align: 'right' },
+    { key: 's_rate',    label: 'S Rate',      align: 'right' },
+    { key: 's_amt',     label: `S Amt (${data?.currency || currency})`, align: 'right' },
+    { key: 'curr_ct',   label: 'Curr Ct',     align: 'right' },
+    { key: 'curr_rate', label: 'Curr Rate',   align: 'right' },
+    { key: 'curr_amt',  label: `Curr Amt (${data?.currency || currency})`, align: 'right' },
   ];
 
   return (
@@ -174,9 +193,15 @@ export default function ParcelDetailedStockReport() {
               <tr>
                 {COLS.map(c => (
                   <th
-                    key={c.label}
-                    className={`px-3 py-3 font-medium text-gray-600 whitespace-nowrap text-${c.align}`}
-                  >{c.label}</th>
+                    key={c.key}
+                    onClick={() => handleSort(c.key)}
+                    className={`px-3 py-3 font-medium text-gray-600 whitespace-nowrap text-${c.align} cursor-pointer select-none hover:bg-gray-100`}
+                  >
+                    <span className={`inline-flex items-center gap-1 ${c.align === 'right' ? 'justify-end w-full' : ''}`}>
+                      {c.label}
+                      <span className="text-gray-400 text-xs">{sort.col === c.key ? (sort.dir === 'asc' ? '↑' : '↓') : '⇅'}</span>
+                    </span>
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -185,7 +210,7 @@ export default function ParcelDetailedStockReport() {
                 <tr>
                   <td colSpan={COLS.length} className="text-center text-gray-400 py-8">No data found for this lot</td>
                 </tr>
-              ) : rows.map((row, i) => {
+              ) : sortedRows.map((row, i) => {
                 const pMismatch = row.state === 'Purchase' && inrUsdMismatch(row.p_amt_inr, row.p_amt_usd);
                 const sMismatch = row.state === 'Sale'     && inrUsdMismatch(row.s_amt_inr, row.s_amt_usd);
                 const mismatchCell = 'bg-red-100 text-red-700';

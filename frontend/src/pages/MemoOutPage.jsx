@@ -3,7 +3,6 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Download, Plus, Save, Trash2 } from 'lucide-react';
 import api from '../api';
-import SearchableSelect from '../components/SearchableSelect';
 import ListPageControls from '../components/ListPageControls';
 import PartyField from '../components/PartyField';
 import { getCurrentDateISO } from '../utils/dateDefaults';
@@ -384,11 +383,12 @@ export default function MemoOutPage() {
             </div>
             <div className="flex-1">
               <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Search by Lot No</label>
-              <SearchableSelect
+              <input
+                type="text"
+                placeholder="Enter lot number..."
                 value={lotNumberSearch}
-                options={(opts.lot_numbers || []).map(String)}
-                onChange={setLotNumberSearch}
-                placeholder="Select lot number..."
+                onChange={(e) => setLotNumberSearch(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500 outline-none"
               />
             </div>
             <div className="pt-5">

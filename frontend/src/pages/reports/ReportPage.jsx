@@ -7,7 +7,7 @@
  * columns: [{ key, label, format?: (val, row) => string }]
  * totalKeys: keys from data.totals to show in footer
  */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, Columns } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../../api';
@@ -31,6 +31,8 @@ export default function ReportPage({ title, endpoint, filters: filterDefs, colum
   const [hiddenCols, setHiddenCols] = useState(new Set());
   const [showColChooser, setShowColChooser] = useState(false);
   const colChooserRef = useRef(null);
+  const [sortCol, setSortCol] = useState('');
+  const [sortDir, setSortDir] = useState('asc');
 
   useEffect(() => {
     const handleClick = (e) => {
@@ -74,6 +76,25 @@ export default function ReportPage({ title, endpoint, filters: filterDefs, colum
 
   const results = data?.results || data?.entries || (Array.isArray(data) ? data : []);
   const totals = data?.totals || {};
+
+  const handleSort = (key) => {
+    if (sortCol === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(key); setSortDir('asc'); }
+  };
+
+  const sortedResults = useMemo(() => {
+    if (!sortCol) return results;
+    return [...results].sort((a, b) => {
+      const aVal = a[sortCol] ?? '';
+      const bVal = b[sortCol] ?? '';
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortDir === 'asc' ? aVal - bVal : bVal - aVal;
+      }
+      return sortDir === 'asc'
+        ? String(aVal).localeCompare(String(bVal))
+        : String(bVal).localeCompare(String(aVal));
+    });
+  }, [results, sortCol, sortDir]);
 
   const ColChooser = () => (
     <div className="relative" ref={colChooserRef}>
@@ -182,12 +203,20 @@ export default function ReportPage({ title, endpoint, filters: filterDefs, colum
           <div className="bg-white border rounded-lg overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b">
-                <tr>{visibleCols.map(c => <th key={c.key} className="px-3 py-3 text-left font-medium text-gray-600 whitespace-nowrap">{c.label}</th>)}</tr>
+                <tr>{visibleCols.map(c => (
+                  <th key={c.key} onClick={() => handleSort(c.key)}
+                    className="px-3 py-3 text-left font-medium text-gray-600 whitespace-nowrap cursor-pointer select-none hover:bg-gray-100">
+                    <span className="inline-flex items-center gap-1">
+                      {c.label}
+                      <span className="text-gray-400 text-xs">{sortCol === c.key ? (sortDir === 'asc' ? '↑' : '↓') : '⇅'}</span>
+                    </span>
+                  </th>
+                ))}</tr>
               </thead>
               <tbody>
                 {results.length === 0 ? (
                   <tr><td colSpan={visibleCols.length} className="text-center text-gray-400 py-8">No results found</td></tr>
-                ) : results.map((row, i) => (
+                ) : sortedResults.map((row, i) => (
                   <tr key={row.id || i} className="border-b hover:bg-gray-50">
                     {visibleCols.map(c => {
                       const mismatch =
