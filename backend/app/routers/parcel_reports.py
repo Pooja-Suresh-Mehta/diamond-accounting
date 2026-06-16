@@ -473,12 +473,15 @@ async def parcel_purchase_report(
     for purchase, item in rows:
         # Compute per-item INR and USD amounts on-the-fly from the stored item amount
         # item.amount is always in the purchase currency (INR for INR purchases, USD for USD purchases)
+        # purchase.inr_rate = 1 for INR purchases, ~85 for USD purchases
+        # purchase.usd_rate = ~85 (INR per USD) for INR purchases, 1 for USD purchases
         _inr_rate = float(purchase.inr_rate or 85)
+        _usd_rate = float(purchase.usd_rate or 85)
         _amt = float(item.amount or 0)
         _currency = (purchase.currency or "USD").upper()
         if _currency == "INR":
             _item_inr_amt = round(_amt, 2)
-            _item_usd_amt = round(_amt / _inr_rate, 2) if _inr_rate > 0 else 0.0
+            _item_usd_amt = round(_amt / _usd_rate, 2) if _usd_rate > 0 else 0.0
         else:  # USD (or any other foreign currency)
             _item_usd_amt = round(_amt, 2)
             _item_inr_amt = round(_amt * _inr_rate, 2)

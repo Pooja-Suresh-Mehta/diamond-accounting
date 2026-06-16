@@ -194,6 +194,18 @@ async def get_account_master_options(
         .order_by(AccountMaster.account_group_name)
     )).scalars().all()
 
+    db_countries = (await db.execute(
+        select(AccountMaster.country)
+        .where(
+            AccountMaster.company_id == current_user.company_id,
+            AccountMaster.country.isnot(None),
+            AccountMaster.country != "",
+        )
+        .distinct()
+        .order_by(AccountMaster.country)
+    )).scalars().all()
+    all_countries = sorted(set(COUNTRY_OPTIONS) | {c.strip().upper() for c in db_countries if c and c.strip()})
+
     groups = [{"name": g, "account_type": ""} for g in under_values if g]
     return {
         "entry_types": ["Account", "Group"],
@@ -208,7 +220,7 @@ async def get_account_master_options(
         "account_types": ACCOUNT_TYPE_OPTIONS,
         "cities": CITY_OPTIONS,
         "states": STATE_OPTIONS,
-        "countries": COUNTRY_OPTIONS,
+        "countries": all_countries,
         "brokers": brokers,
     }
 
